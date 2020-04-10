@@ -1,0 +1,10 @@
+set (SOURCE_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/Main.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GeometryBuilder.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Math4D.h
+)
+
+set (TARGET_NAME Snake4D)
+add_executable(${TARGET_NAME} WIN32 ${SOURCE_FILES})
+target_link_libraries (${TARGET_NAME} Urho3D)
+set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 17)

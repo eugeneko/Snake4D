@@ -1,0 +1,22 @@
+# Ignore generated projects
+build/
+.vscode/
+
+# Ignore sym-linked objects
+CMake/
+Assets/Binary/
+
+# Ignore binaries
+bin/
+
+# Ignore standard assets
+Assets/Autoload/
+Assets/CoreData/
+Assets/Data/
+Assets/EditorData/
+
+# Ignore shader caches
+Assets/*/Shaders/*/Cache/
+
+# Ignore asset caches
+Assets/Cache/
