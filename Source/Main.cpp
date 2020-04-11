@@ -32,6 +32,60 @@ struct RenderSettings
     float snakeMovementSpeed_{ 6.0f };
 };
 
+Vector4 IndexToPosition(const IntVector4& cell)
+{
+    return IntVectorToVector4(cell) + Vector4::ONE * 0.5f;
+}
+
+class GridCamera4D
+{
+public:
+    void Reset(const IntVector4& position, const IntVector4& direction, const Matrix4& rotation)
+    {
+        currentDirection_ = direction;
+
+        previousPosition_ = position;
+        currentPosition_ = position;
+
+        previousRotation_ = { rotation, Vector4::ZERO };
+        currentRotation_ = { rotation, Vector4::ZERO };
+        rotationDelta_ = {};
+    }
+
+    void Step(const RotationDelta4D& delta)
+    {
+        rotationDelta_ = delta;
+
+        // TODO: Round matrix to integers
+        previousRotation_ = currentRotation_;
+        currentRotation_ = currentRotation_ * rotationDelta_.AsMatrix(1.0f);
+        currentDirection_ = RoundVector4(currentRotation_ * Vector4(0, 0, 1, 0));
+
+        previousPosition_ = currentPosition_;
+        currentPosition_ = currentPosition_ + currentDirection_;
+    }
+
+    Matrix4x5 GetViewMatrix(float translationBlendFactor, float rotationBlendFactor) const
+    {
+        const Vector4 cameraPosition = Lerp(
+            IndexToPosition(previousPosition_), IndexToPosition(currentPosition_), translationBlendFactor);
+        const Matrix4x5 cameraRotation = previousRotation_ * rotationDelta_.AsMatrix(rotationBlendFactor);
+        return cameraRotation.FastInverted() * Matrix4x5::MakeTranslation(-cameraPosition);
+    }
+
+    const IntVector4& GetCurrentPosition() const { return currentPosition_; }
+
+private:
+    IntVector4 currentDirection_{};
+
+    IntVector4 previousPosition_;
+    IntVector4 currentPosition_;
+
+    Matrix4x5 previousRotation_;
+    Matrix4x5 currentRotation_;
+    RotationDelta4D rotationDelta_;
+};
+
 class GameWorld
 {
 public:
@@ -43,7 +97,8 @@ public:
         snake_.push_back({ size_ / 2, size_ / 2, size_ * 1 / 4, size_ / 2 });
         snake_.push_back({ size_ / 2, size_ / 2, size_ * 1 / 4 - 1, size_ / 2 });
         previousSnake_ = snake_;
-        moveDirection_ = { 0, 0, 1, 0 };
+
+        camera_.Reset(snake_.front(), { 0, 0, 1, 0 }, Matrix4::IDENTITY);
         targetPosition_ = { size_ / 2, size_ / 2, size_ * 3 / 4, size_ / 2 };
     }
 
@@ -56,28 +111,27 @@ public:
         // Update camera
         const float cameraTranslationFactor = Clamp(blendFactor * renderSettings_.cameraTranslationSpeed_, 0.0f, 1.0f);
         const float cameraRotationFactor = Clamp(blendFactor * renderSettings_.cameraRotationSpeed_, 0.0f, 1.0f);
-        const float snakeMovementFactor = Clamp(blendFactor * renderSettings_.snakeMovementSpeed_, 0.0f, 1.0f);
-        const Vector4 cameraPosition = Lerp(GetCellCenter(previousSnake_.front()), GetCellCenter(snake_.front()), cameraTranslationFactor);
-        const Matrix4x5 cameraRotation = previousOrientation_ * rotationDelta_.AsMatrix(cameraRotationFactor);
-        const Matrix4x5 camera = cameraRotation.FastInverted() * Matrix4x5::MakeTranslation(-cameraPosition);
+        const Matrix4x5 camera = camera_.GetViewMatrix(cameraTranslationFactor, cameraRotationFactor);
 
         // Reset scene
         scene.Reset(camera);
 
         // Render snake
+        const float snakeMovementFactor = Clamp(blendFactor * renderSettings_.snakeMovementSpeed_, 0.0f, 1.0f);
+
         const unsigned oldLength = previousSnake_.size();
         const unsigned newLength = snake_.size();
         const unsigned commonLength = ea::max(oldLength, newLength);
         for (unsigned i = 0; i < commonLength; ++i)
         {
-            const Vector4 previousPosition = GetCellCenter(previousSnake_[i]);
-            const Vector4 currentPosition = GetCellCenter(snake_[i]);
+            const Vector4 previousPosition = IndexToPosition(previousSnake_[i]);
+            const Vector4 currentPosition = IndexToPosition(snake_[i]);
             const Vector4 position = Lerp(previousPosition, currentPosition, snakeMovementFactor);
             scene.wireframeTesseracts_.push_back(Tesseract{ position, Vector4::ONE, snakeColor });
         }
         for (unsigned i = commonLength; i < newLength; ++i)
         {
-            const Vector4 currentPosition = GetCellCenter(snake_[i]);
+            const Vector4 currentPosition = IndexToPosition(snake_[i]);
             const Vector4 currentSize = Vector4::ONE * snakeMovementFactor;
             scene.wireframeTesseracts_.push_back(Tesseract{ currentPosition, currentSize, snakeColor });
         }
@@ -126,7 +180,7 @@ public:
         }
 
         // Render target
-        scene.wireframeTesseracts_.push_back(Tesseract{ GetCellCenter(targetPosition_), Vector4::ONE * 0.6f, targetColor });
+        scene.wireframeTesseracts_.push_back(Tesseract{ IndexToPosition(targetPosition_), Vector4::ONE * 0.6f, targetColor });
     }
 
     void SetNextRotation(RelativeRotation4D rotation)
@@ -137,26 +191,26 @@ public:
     void Tick()
     {
         // Get orientation increment
-        rotationDelta_ = {};
+        RotationDelta4D rotationDelta{};
         switch (nextRotation_)
         {
         case RelativeRotation4D::Left:
-            rotationDelta_ = { 0, 2, -90.0f };
+            rotationDelta = { 0, 2, -90.0f };
             break;
         case RelativeRotation4D::Right:
-            rotationDelta_ = { 0, 2, 90.0f };
+            rotationDelta = { 0, 2, 90.0f };
             break;
         case RelativeRotation4D::Up:
-            rotationDelta_ = { 1, 2, 90.0f };
+            rotationDelta = { 1, 2, 90.0f };
             break;
         case RelativeRotation4D::Down:
-            rotationDelta_ = { 1, 2, -90.0f };
+            rotationDelta = { 1, 2, -90.0f };
             break;
         case RelativeRotation4D::Red:
-            rotationDelta_ = { 0, 3, -90.0f };
+            rotationDelta = { 0, 3, -90.0f };
             break;
         case RelativeRotation4D::Blue:
-            rotationDelta_ = { 0, 3, 90.0f };
+            rotationDelta = { 0, 3, 90.0f };
             break;
         case RelativeRotation4D::None:
         default:
@@ -164,36 +218,25 @@ public:
         }
         nextRotation_ = RelativeRotation4D::None;
 
-        // Update orientation
-        // TODO: Round to integers
-        previousOrientation_ = currentOrientation_;
-        currentOrientation_ = currentOrientation_ * rotationDelta_.AsMatrix(1.0f);
-        moveDirection_ = RoundVector4(currentOrientation_ * Vector4(0, 0, 1, 0));
+        camera_.Step(rotationDelta);
 
         previousSnake_ = snake_;
-        snake_.push_front(snake_.front() + moveDirection_);
+        snake_.push_front(camera_.GetCurrentPosition());
         snake_.pop_back();
     }
 
 private:
-    Vector4 GetCellCenter(const IntVector4& cell) const
-    {
-        return IntVectorToVector4(cell) + Vector4::ONE * 0.5f;
-    }
-
     int size_{};
     RenderSettings renderSettings_;
+
+    GridCamera4D camera_;
 
     RelativeRotation4D nextRotation_{};
 
     ea::vector<IntVector4> snake_;
-    RotationDelta4D rotationDelta_;
-    Matrix4x5 currentOrientation_;
-    IntVector4 moveDirection_{};
-    IntVector4 targetPosition_{};
-
     ea::vector<IntVector4> previousSnake_;
-    Matrix4x5 previousOrientation_;
+
+    IntVector4 targetPosition_{};
 };
 
 void BuildScene4D(CustomGeometryBuilder builder, const Scene4D& scene)
