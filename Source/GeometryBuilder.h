@@ -27,7 +27,16 @@ struct CustomGeometryBuilder
     }
 };
 
-void BuildQuadFrame(CustomGeometryBuilder builder, ea::span<const SimpleVertex, 4> frame, const Vector2& thickness)
+void BuildSolidQuad(CustomGeometryBuilder builder, ea::span<const SimpleVertex, 4> frame)
+{
+    // Vertex order:
+    // 3 2
+    // 0 1
+    const unsigned indices[2 * 3] = { 0, 3, 2, 0, 2, 1 };
+    builder(frame, indices);
+}
+
+void BuildWireframeQuad(CustomGeometryBuilder builder, ea::span<const SimpleVertex, 4> frame, const Vector2& thickness)
 {
     // Vertex order:
     // 3 2
@@ -74,7 +83,7 @@ void BuildQuadFrame(CustomGeometryBuilder builder, ea::span<const SimpleVertex, 
     builder(vertices, indices);
 }
 
-void BuildTesseractFrame(CustomGeometryBuilder builder, ea::span<const SimpleVertex, 16> frame, const Vector2& thickness)
+void BuildWireframeTesseract(CustomGeometryBuilder builder, ea::span<const SimpleVertex, 16> frame, const Vector2& thickness)
 {
     // Vertex order:
     //  6--7
@@ -97,7 +106,7 @@ void BuildTesseractFrame(CustomGeometryBuilder builder, ea::span<const SimpleVer
         {
             for (unsigned k = 0; k < 4; ++k)
                 faceFrame[k] = frame[faces[i][k] + j * 8];
-            BuildQuadFrame(builder, faceFrame, thickness);
+            BuildWireframeQuad(builder, faceFrame, thickness);
         }
     }
     const unsigned edges[12][2] =
@@ -120,7 +129,7 @@ void BuildTesseractFrame(CustomGeometryBuilder builder, ea::span<const SimpleVer
         const unsigned face[4] = { edges[i][0], edges[i][1], edges[i][1] + 8, edges[i][0] + 8 };
         for (unsigned j = 0; j < 4; ++j)
             faceFrame[j] = frame[face[j]];
-        BuildQuadFrame(builder, faceFrame, thickness);
+        BuildWireframeQuad(builder, faceFrame, thickness);
     }
 }
 

@@ -25,6 +25,14 @@ struct Tesseract
     ColorTriplet color_;
 };
 
+struct Quad
+{
+    Vector4 position_;
+    Vector4 deltaX_;
+    Vector4 deltaY_;
+    ColorTriplet color_;
+};
+
 SimpleVertex ProjectVertex4DTo3D(const Vector4& position, const Vector3& focusPositionViewSpace, float hyperPositionOffset,
     const ColorTriplet& color, float hyperColorOffset)
 {
@@ -46,10 +54,16 @@ struct Scene4D
     float hyperPositionOffset_{ 0.05f };
     Vector3 focusPositionViewSpace_{ Vector3::ZERO };
 
-    Matrix4x5 transform_;
-    ea::vector<Tesseract> tesseracts_;
+    Matrix4x5 cameraTransform_;
+    ea::vector<Tesseract> wireframeTesseracts_;
+    ea::vector<Quad> solidQuads_;
 
-    SimpleVertex ProjectVertex4D(const Vector4& position, const ColorTriplet& color) const
+    SimpleVertex ConvertWorldToProj(const Vector4& position, const ColorTriplet& color) const
+    {
+        return ConvertViewToProj(cameraTransform_ * position, color);
+    }
+
+    SimpleVertex ConvertViewToProj(const Vector4& position, const ColorTriplet& color) const
     {
         return ProjectVertex4DTo3D(position, focusPositionViewSpace_, hyperPositionOffset_, color, hyperColorOffset_);
     }
@@ -100,23 +114,21 @@ public:
     {
         static const ColorTriplet snakeColor{ Color::WHITE, Color::RED, Color::BLUE };
         static const ColorTriplet targetColor{ Color::GREEN, { 1.0f, 1.0f, 0.0f }, { 0.0f, 1.0f, 1.0f } };
+        static const ColorTriplet borderColor{ Color::WHITE, Color::WHITE, Color::WHITE };
 
         // Update camera
         const float cameraTranslationFactor = Clamp(blendFactor * settings.cameraTranslationSpeed_, 0.0f, 1.0f);
         const float cameraRotationFactor = Clamp(blendFactor * settings.cameraRotationSpeed_, 0.0f, 1.0f);
         const float snakeMovementFactor = Clamp(blendFactor * settings.snakeMovementSpeed_, 0.0f, 1.0f);
-        const Vector4 cameraPosition = Lerp(IntVectorToVector4(previousSnake_.front()), IntVectorToVector4(snake_.front()), cameraTranslationFactor);
+        const Vector4 cameraPosition = Lerp(GetCellCenter(previousSnake_.front()), GetCellCenter(snake_.front()), cameraTranslationFactor);
         const Matrix4x5 cameraRotation = previousOrientation_ * currentRotationIncrement_.AsMatrix(cameraRotationFactor);
         const Matrix4x5 camera = cameraRotation.FastInverted() * Matrix4x5::MakeTranslation(-cameraPosition);
 
         // Reset scene
-        scene.transform_ = camera;
+        scene.cameraTransform_ = camera;
         scene.focusPositionViewSpace_ = Vector3::ZERO;
-        scene.tesseracts_.clear();
-
-        // Render frame
-        const Vector4 frameSize = Vector4::ONE * static_cast<float>(size_);
-        scene.tesseracts_.push_back(Tesseract{ frameSize / 2.0f, frameSize, snakeColor });
+        scene.wireframeTesseracts_.clear();
+        scene.solidQuads_.clear();
 
         // Render snake
         const unsigned oldLength = previousSnake_.size();
@@ -124,20 +136,63 @@ public:
         const unsigned commonLength = ea::max(oldLength, newLength);
         for (unsigned i = 0; i < commonLength; ++i)
         {
-            const Vector4 previousPosition = IntVectorToVector4(previousSnake_[i]);
-            const Vector4 currentPosition = IntVectorToVector4(snake_[i]);
+            const Vector4 previousPosition = GetCellCenter(previousSnake_[i]);
+            const Vector4 currentPosition = GetCellCenter(snake_[i]);
             const Vector4 position = Lerp(previousPosition, currentPosition, snakeMovementFactor);
-            scene.tesseracts_.push_back(Tesseract{ position, Vector4::ONE, snakeColor });
+            scene.wireframeTesseracts_.push_back(Tesseract{ position, Vector4::ONE, snakeColor });
         }
         for (unsigned i = commonLength; i < newLength; ++i)
         {
-            const Vector4 currentPosition = IntVectorToVector4(snake_[i]);
+            const Vector4 currentPosition = GetCellCenter(snake_[i]);
             const Vector4 currentSize = Vector4::ONE * snakeMovementFactor;
-            scene.tesseracts_.push_back(Tesseract{ currentPosition, currentSize, snakeColor });
+            scene.wireframeTesseracts_.push_back(Tesseract{ currentPosition, currentSize, snakeColor });
+        }
+
+        // Render borders
+        static const IntVector4 directions[8] = {
+            { +1, 0, 0, 0 },
+            { -1, 0, 0, 0 },
+            { 0, +1, 0, 0 },
+            { 0, -1, 0, 0 },
+            { 0, 0, +1, 0 },
+            { 0, 0, -1, 0 },
+            { 0, 0, 0, +1 },
+            { 0, 0, 0, -1 },
+        };
+
+        const int hyperAxisIndex = FindHyperAxis(camera.rotation_);
+        const float halfSize = size_ * 0.5f;
+        for (int directionIndex = 0; directionIndex < 4; ++directionIndex)
+        {
+            for (float sign : { -1.0f, 1.0f })
+            {
+                const float threshold = 0.2f;
+                const Vector4 direction = MakeDirection(directionIndex, sign);
+                const Vector4 viewSpaceDirection = camera.rotation_ * direction;
+                if (Abs(viewSpaceDirection.w_) > threshold)
+                    continue;
+
+                const auto quadPlaneAxises = FlipAxisPair(directionIndex, hyperAxisIndex);
+                const Vector4 xAxis = MakeDirection(quadPlaneAxises.first, 1);
+                const Vector4 yAxis = MakeDirection(quadPlaneAxises.second, 1);
+
+                const float intensity = 1.0f - Abs(viewSpaceDirection.w_) / threshold;
+                for (int x = 0; x < size_; ++x)
+                {
+                    for (int y = 0; y < size_; ++y)
+                    {
+                        const Vector4 position = Vector4::ONE * halfSize
+                            + direction * halfSize
+                            + xAxis * (x - halfSize + 0.5f)
+                            + yAxis * (y - halfSize + 0.5f);
+                        scene.solidQuads_.push_back(Quad{ position, xAxis * 0.1f, yAxis * 0.1f, borderColor });
+                    }
+                }
+            }
         }
 
         // Render target
-        scene.tesseracts_.push_back(Tesseract{ IntVectorToVector4(targetPosition_), Vector4::ONE * 0.6f, targetColor });
+        scene.wireframeTesseracts_.push_back(Tesseract{ GetCellCenter(targetPosition_), Vector4::ONE * 0.6f, targetColor });
     }
 
     void SetNextRotation(RelativeRotation4D rotation)
@@ -189,6 +244,11 @@ public:
     }
 
 private:
+    Vector4 GetCellCenter(const IntVector4& cell) const
+    {
+        return IntVectorToVector4(cell) + Vector4::ONE * 0.5f;
+    }
+
     int size_{};
 
     RelativeRotation4D nextRotation_{};
@@ -205,6 +265,7 @@ private:
 
 void BuildScene4D(CustomGeometryBuilder builder, const Scene4D& scene)
 {
+    // Draw wireframe tesseracts
     Vector4 tesseractVertices[16];
     for (unsigned i = 0; i < 16; ++i)
     {
@@ -215,14 +276,27 @@ void BuildScene4D(CustomGeometryBuilder builder, const Scene4D& scene)
     }
 
     SimpleVertex vertices[16];
-    for (const Tesseract& tesseract : scene.tesseracts_)
+    for (const Tesseract& tesseract : scene.wireframeTesseracts_)
     {
         for (unsigned i = 0; i < 16; ++i)
         {
-            const Vector4 vertexPosition = scene.transform_ * (tesseractVertices[i] * tesseract.size_ + tesseract.position_);
-            vertices[i] = scene.ProjectVertex4D(vertexPosition, tesseract.color_);
+            const Vector4 vertexPosition = tesseractVertices[i] * tesseract.size_ + tesseract.position_;
+            vertices[i] = scene.ConvertWorldToProj(vertexPosition, tesseract.color_);
         }
-        BuildTesseractFrame(builder, vertices, { 0.03f, 0.02f } );
+        BuildWireframeTesseract(builder, vertices, { 0.03f, 0.02f } );
+    }
+
+    // Draw solid quads
+    for (const Quad& quad : scene.solidQuads_)
+    {
+        static const Vector2 offsets[4] = { { -0.5f, -0.5f }, { 0.5f, -0.5f }, { 0.5f, 0.5f }, { -0.5f, 0.5f } };
+        SimpleVertex vertices[4];
+        for (unsigned i = 0; i < 4; ++i)
+        {
+            const Vector4 vertexPosition = quad.position_ + quad.deltaX_ * offsets[i].x_ + quad.deltaY_ * offsets[i].y_;
+            vertices[i] = scene.ConvertWorldToProj(vertexPosition, quad.color_);
+        };
+        BuildSolidQuad(builder, vertices);
     }
 }
 
@@ -306,20 +380,6 @@ void MainApplication::Start()
 
         auto camera = cameraNode->CreateComponent<Camera>();
         camera_ = camera;
-    }
-
-    // Create ground
-    {
-        Node* node = scene_->CreateChild("Ground");
-        node->SetWorldScale(200.0f);
-        node->SetWorldPosition(Vector3(0.0f, -10.0f, 0.0f));
-
-        auto model = context_->GetCache()->GetResource<Model>("Models/Plane.mdl");
-
-        auto staticModel = node->CreateComponent<StaticModel>();
-        staticModel->SetModel(model);
-        staticModel->SetMaterial(context_->GetCache()->GetResource<Material>("Materials/DefaultGrey.xml"));
-        staticModel->SetCastShadows(true);
     }
 
     // Update loop

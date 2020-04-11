@@ -36,7 +36,7 @@ struct Matrix4x5
     {
         return { Matrix4::IDENTITY, offset };
     }
-    static Matrix4x5 MakeRotation(int axis1, int axis2, float angle)
+    static Matrix4x5 MakeRotation(unsigned axis1, unsigned axis2, float angle)
     {
         assert(axis1 < axis2 && axis1 < 4 && axis2 < 4);
 
@@ -83,6 +83,53 @@ Matrix4x5 Lerp(const Matrix4x5& lhs, const Matrix4x5& rhs, float factor)
         }
     }
     return result;
+}
+
+Vector4 MakeDirection(unsigned axis, float sign)
+{
+    Vector4 direction{};
+    direction[axis] = sign;
+    return direction;
+}
+
+ea::pair<int, int> FlipAxisPair(int axis1, int axis2)
+{
+    assert(axis1 != axis2);
+    assert(0 <= axis1 && axis1 < 4);
+    assert(0 <= axis2 && axis2 < 4);
+
+    if (axis1 > axis2)
+        ea::swap(axis1, axis2);
+
+    // Table format, first axis vertical, second axis horizontal
+    //   1 2 3
+    // 0 * * *
+    // 1 - * *
+    // 2 - - *
+    const ea::pair<int, int> results[3][3] =
+    {
+        { { 2, 3 }, { 1, 3 }, { 1, 2 } }, // 0 + { 1, 2, 3 }
+        { {},       { 0, 3 }, { 0, 2 } }, // 1 + { 2, 3 }
+        { {},             {}, { 0, 1 } }  // 2 + { 3 }
+    };
+    return results[axis1][axis2 - 1];
+}
+
+int FindHyperAxis(const Matrix4& rotation)
+{
+    int axis = 0;
+    float maxScore = -1;
+
+    for (int i = 0; i < 4; ++i)
+    {
+        const float value = Abs(rotation.Element(3, i));
+        if (value > maxScore)
+        {
+            maxScore = value;
+            axis = i;
+        }
+    }
+    return axis;
 }
 
 }
