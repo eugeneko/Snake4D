@@ -1,73 +1,10 @@
 #include "GeometryBuilder.h"
 #include "Math4D.h"
+#include "Scene4D.h"
 
-#include <EASTL/array.h>
+#include <Urho3D/Urho3DAll.h>
 
 using namespace Urho3D;
-
-struct ColorTriplet
-{
-    Color base_;
-    Color red_;
-    Color blue_;
-};
-
-struct SimpleVertex4D
-{
-    Vector4 position_;
-    Color color_;
-};
-
-struct Tesseract
-{
-    Vector4 position_;
-    Vector4 size_;
-    ColorTriplet color_;
-};
-
-struct Quad
-{
-    Vector4 position_;
-    Vector4 deltaX_;
-    Vector4 deltaY_;
-    ColorTriplet color_;
-};
-
-SimpleVertex ProjectVertex4DTo3D(const Vector4& position, const Vector3& focusPositionViewSpace, float hyperPositionOffset,
-    const ColorTriplet& color, float hyperColorOffset)
-{
-    const Vector3 position3D = static_cast<Vector3>(position);
-    const float positionScaleFactor = std::exp(position.w_ * hyperPositionOffset);
-    const Vector3 scaledPosition3D = focusPositionViewSpace + (position3D - focusPositionViewSpace) * positionScaleFactor;
-
-    const float colorLerpFactor = 1.0f / (1.0f + std::exp(-hyperColorOffset * position.w_));
-    const Color finalColor = colorLerpFactor < 0.5f
-        ? Lerp(color.red_, color.base_, 2.0f * colorLerpFactor)
-        : Lerp(color.base_, color.blue_, 2.0f * colorLerpFactor - 1.0f);
-
-    return { scaledPosition3D, finalColor };
-}
-
-struct Scene4D
-{
-    float hyperColorOffset_{ 0.5f };
-    float hyperPositionOffset_{ 0.05f };
-    Vector3 focusPositionViewSpace_{ Vector3::ZERO };
-
-    Matrix4x5 cameraTransform_;
-    ea::vector<Tesseract> wireframeTesseracts_;
-    ea::vector<Quad> solidQuads_;
-
-    SimpleVertex ConvertWorldToProj(const Vector4& position, const ColorTriplet& color) const
-    {
-        return ConvertViewToProj(cameraTransform_ * position, color);
-    }
-
-    SimpleVertex ConvertViewToProj(const Vector4& position, const ColorTriplet& color) const
-    {
-        return ProjectVertex4DTo3D(position, focusPositionViewSpace_, hyperPositionOffset_, color, hyperColorOffset_);
-    }
-};
 
 enum class RelativeRotation4D
 {
@@ -80,7 +17,7 @@ enum class RelativeRotation4D
     Blue
 };
 
-struct RotationIncrement
+struct RotationDelta4D
 {
     int axis1_{};
     int axis2_{};
@@ -88,7 +25,7 @@ struct RotationIncrement
     Matrix4x5 AsMatrix(float factor) const { return angle_ != 0.0f ? Matrix4x5::MakeRotation(axis1_, axis2_, factor * angle_) : Matrix4x5::MakeIdentity(); }
 };
 
-struct AnimationSettings
+struct RenderSettings
 {
     float cameraTranslationSpeed_{ 1.0f };
     float cameraRotationSpeed_{ 3.0f };
@@ -110,25 +47,22 @@ public:
         targetPosition_ = { size_ / 2, size_ / 2, size_ * 3 / 4, size_ / 2 };
     }
 
-    void Render(Scene4D& scene, float blendFactor, const AnimationSettings& settings) const
+    void Render(Scene4D& scene, float blendFactor) const
     {
         static const ColorTriplet snakeColor{ Color::WHITE, Color::RED, Color::BLUE };
         static const ColorTriplet targetColor{ Color::GREEN, { 1.0f, 1.0f, 0.0f }, { 0.0f, 1.0f, 1.0f } };
         static const ColorTriplet borderColor{ Color::WHITE, Color::WHITE, Color::WHITE };
 
         // Update camera
-        const float cameraTranslationFactor = Clamp(blendFactor * settings.cameraTranslationSpeed_, 0.0f, 1.0f);
-        const float cameraRotationFactor = Clamp(blendFactor * settings.cameraRotationSpeed_, 0.0f, 1.0f);
-        const float snakeMovementFactor = Clamp(blendFactor * settings.snakeMovementSpeed_, 0.0f, 1.0f);
+        const float cameraTranslationFactor = Clamp(blendFactor * renderSettings_.cameraTranslationSpeed_, 0.0f, 1.0f);
+        const float cameraRotationFactor = Clamp(blendFactor * renderSettings_.cameraRotationSpeed_, 0.0f, 1.0f);
+        const float snakeMovementFactor = Clamp(blendFactor * renderSettings_.snakeMovementSpeed_, 0.0f, 1.0f);
         const Vector4 cameraPosition = Lerp(GetCellCenter(previousSnake_.front()), GetCellCenter(snake_.front()), cameraTranslationFactor);
-        const Matrix4x5 cameraRotation = previousOrientation_ * currentRotationIncrement_.AsMatrix(cameraRotationFactor);
+        const Matrix4x5 cameraRotation = previousOrientation_ * rotationDelta_.AsMatrix(cameraRotationFactor);
         const Matrix4x5 camera = cameraRotation.FastInverted() * Matrix4x5::MakeTranslation(-cameraPosition);
 
         // Reset scene
-        scene.cameraTransform_ = camera;
-        scene.focusPositionViewSpace_ = Vector3::ZERO;
-        scene.wireframeTesseracts_.clear();
-        scene.solidQuads_.clear();
+        scene.Reset(camera);
 
         // Render snake
         const unsigned oldLength = previousSnake_.size();
@@ -203,28 +137,26 @@ public:
     void Tick()
     {
         // Get orientation increment
-        currentRotationIncrement_ = {};
+        rotationDelta_ = {};
         switch (nextRotation_)
         {
         case RelativeRotation4D::Left:
-            currentRotationIncrement_ = { 0, 2, -90.0f };
+            rotationDelta_ = { 0, 2, -90.0f };
             break;
         case RelativeRotation4D::Right:
-            currentRotationIncrement_ = { 0, 2, 90.0f };
+            rotationDelta_ = { 0, 2, 90.0f };
             break;
         case RelativeRotation4D::Up:
-            currentRotationIncrement_ = { 1, 2, 90.0f };
+            rotationDelta_ = { 1, 2, 90.0f };
             break;
         case RelativeRotation4D::Down:
-            currentRotationIncrement_ = { 1, 2, -90.0f };
+            rotationDelta_ = { 1, 2, -90.0f };
             break;
         case RelativeRotation4D::Red:
-            currentRotationIncrement_ = { 0, 3, -90.0f };
-            //currentRotationIncrement_ = { 2, 3, 90.0f };
+            rotationDelta_ = { 0, 3, -90.0f };
             break;
         case RelativeRotation4D::Blue:
-            currentRotationIncrement_ = { 0, 3, 90.0f };
-            //currentRotationIncrement_ = { 2, 3, -90.0f };
+            rotationDelta_ = { 0, 3, 90.0f };
             break;
         case RelativeRotation4D::None:
         default:
@@ -235,7 +167,7 @@ public:
         // Update orientation
         // TODO: Round to integers
         previousOrientation_ = currentOrientation_;
-        currentOrientation_ = currentOrientation_ * currentRotationIncrement_.AsMatrix(1.0f);
+        currentOrientation_ = currentOrientation_ * rotationDelta_.AsMatrix(1.0f);
         moveDirection_ = RoundVector4(currentOrientation_ * Vector4(0, 0, 1, 0));
 
         previousSnake_ = snake_;
@@ -250,11 +182,12 @@ private:
     }
 
     int size_{};
+    RenderSettings renderSettings_;
 
     RelativeRotation4D nextRotation_{};
 
     ea::vector<IntVector4> snake_;
-    RotationIncrement currentRotationIncrement_;
+    RotationDelta4D rotationDelta_;
     Matrix4x5 currentOrientation_;
     IntVector4 moveDirection_{};
     IntVector4 targetPosition_{};
@@ -419,7 +352,7 @@ void MainApplication::Start()
         }
 
         // Update scene
-        world_.Render(scene4D_, timeAccumulator_ / updatePeriod_, {});
+        world_.Render(scene4D_, timeAccumulator_ / updatePeriod_);
 
         customGeometry->BeginGeometry(0, TRIANGLE_LIST);
         BuildScene4D(CustomGeometryBuilder{ customGeometry }, scene4D_);

@@ -1,4 +1,9 @@
-#include <Urho3D/Urho3DAll.h>
+#pragma once
+
+#include <Urho3D/Math/Matrix4.h>
+#include <Urho3D/Math/Vector4.h>
+
+#include <EASTL/array.h>
 
 namespace Urho3D
 {

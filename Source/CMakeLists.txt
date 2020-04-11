@@ -2,6 +2,7 @@ set (SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/Main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GeometryBuilder.h
     ${CMAKE_CURRENT_SOURCE_DIR}/Math4D.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Scene4D.h
 )
 
 set (TARGET_NAME Snake4D)

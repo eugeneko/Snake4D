@@ -1,4 +1,8 @@
-#include <Urho3D/Urho3DAll.h>
+#pragma once
+
+#include <Urho3D/Graphics/CustomGeometry.h>
+
+#include <EASTL/span.h>
 
 namespace Urho3D
 {
