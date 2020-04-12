@@ -239,43 +239,6 @@ private:
     IntVector4 targetPosition_{};
 };
 
-void BuildScene4D(CustomGeometryBuilder builder, const Scene4D& scene)
-{
-    // Draw wireframe tesseracts
-    Vector4 tesseractVertices[16];
-    for (unsigned i = 0; i < 16; ++i)
-    {
-        tesseractVertices[i].x_ = !!(i & 0x1) ? 0.5f : -0.5f;
-        tesseractVertices[i].y_ = !!(i & 0x2) ? 0.5f : -0.5f;
-        tesseractVertices[i].z_ = !!(i & 0x4) ? 0.5f : -0.5f;
-        tesseractVertices[i].w_ = !!(i & 0x8) ? 0.5f : -0.5f;
-    }
-
-    SimpleVertex vertices[16];
-    for (const Tesseract& tesseract : scene.wireframeTesseracts_)
-    {
-        for (unsigned i = 0; i < 16; ++i)
-        {
-            const Vector4 vertexPosition = tesseractVertices[i] * tesseract.size_ + tesseract.position_;
-            vertices[i] = scene.ConvertWorldToProj(vertexPosition, tesseract.color_);
-        }
-        BuildWireframeTesseract(builder, vertices, { 0.03f, 0.02f } );
-    }
-
-    // Draw solid quads
-    for (const Quad& quad : scene.solidQuads_)
-    {
-        static const Vector2 offsets[4] = { { -0.5f, -0.5f }, { 0.5f, -0.5f }, { 0.5f, 0.5f }, { -0.5f, 0.5f } };
-        SimpleVertex vertices[4];
-        for (unsigned i = 0; i < 4; ++i)
-        {
-            const Vector4 vertexPosition = quad.position_ + quad.deltaX_ * offsets[i].x_ + quad.deltaY_ * offsets[i].y_;
-            vertices[i] = scene.ConvertWorldToProj(vertexPosition, quad.color_);
-        };
-        BuildSolidQuad(builder, vertices);
-    }
-}
-
 class MainApplication : public Application
 {
 public:
@@ -326,18 +289,27 @@ void MainApplication::Start()
     scene_->CreateComponent<Octree>();
     scene_->CreateComponent<DebugRenderer>();
 
-    auto customMaterial = MakeShared<Material>(context_);
-    customMaterial->SetCullMode(CULL_NONE);
-    customMaterial->SetNumTechniques(1);
-    //customMaterial->SetTechnique(0, cache->GetResource<Technique>("Techniques/NoTextureUnlitAlpha.xml"));
-    customMaterial->SetTechnique(0, cache->GetResource<Technique>("Techniques/NoTextureUnlit.xml"));
-    customMaterial->SetShaderParameter("MatDiffColor", Color::WHITE);
-    customMaterial->SetVertexShaderDefines("VERTEXCOLOR");
-    customMaterial->SetPixelShaderDefines("VERTEXCOLOR");
+    auto solidMaterial = MakeShared<Material>(context_);
+    solidMaterial->SetCullMode(CULL_NONE);
+    solidMaterial->SetNumTechniques(1);
+    solidMaterial->SetTechnique(0, cache->GetResource<Technique>("Techniques/NoTextureUnlit.xml"));
+    solidMaterial->SetShaderParameter("MatDiffColor", Color::WHITE);
+    solidMaterial->SetVertexShaderDefines("VERTEXCOLOR");
+    solidMaterial->SetPixelShaderDefines("VERTEXCOLOR");
+
+    auto transparentMaterial = MakeShared<Material>(context_);
+    transparentMaterial->SetCullMode(CULL_NONE);
+    transparentMaterial->SetNumTechniques(1);
+    transparentMaterial->SetTechnique(0, cache->GetResource<Technique>("Techniques/NoTextureUnlitAlpha.xml"));
+    transparentMaterial->SetShaderParameter("MatDiffColor", Color::WHITE);
+    transparentMaterial->SetVertexShaderDefines("VERTEXCOLOR");
+    transparentMaterial->SetPixelShaderDefines("VERTEXCOLOR");
 
     Node* customGeometryNode = scene_->CreateChild("Custom Geometry");
-    auto customGeometry = customGeometryNode->CreateComponent<CustomGeometry>();
-    customGeometry->SetMaterial(customMaterial);
+    auto solidGeometry = customGeometryNode->CreateComponent<CustomGeometry>();
+    solidGeometry->SetMaterial(solidMaterial);
+    auto transparentGeometry = customGeometryNode->CreateComponent<CustomGeometry>();
+    transparentGeometry->SetMaterial(transparentMaterial);
 
     // Create zone
     if (auto zone = scene_->CreateComponent<Zone>())
@@ -397,9 +369,13 @@ void MainApplication::Start()
         // Update scene
         world_.Render(scene4D_, timeAccumulator_ / updatePeriod_);
 
-        customGeometry->BeginGeometry(0, TRIANGLE_LIST);
-        BuildScene4D(CustomGeometryBuilder{ customGeometry }, scene4D_);
-        customGeometry->Commit();
+        solidGeometry->BeginGeometry(0, TRIANGLE_LIST);
+        transparentGeometry->BeginGeometry(0, TRIANGLE_LIST);
+
+        BuildScene4D(CustomGeometryBuilder{ solidGeometry, transparentGeometry }, scene4D_);
+
+        solidGeometry->Commit();
+        transparentGeometry->Commit();
     });
 
     viewport_ = MakeShared<Viewport>(context_);

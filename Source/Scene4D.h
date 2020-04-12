@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GeometryBuilder.h"
 #include "Math4D.h"
 
 #include <Urho3D/Math/Color.h>
@@ -79,5 +80,42 @@ struct Scene4D
         return ProjectVertex4DTo3D(position, focusPositionViewSpace_, hyperPositionOffset_, color, hyperColorOffset_);
     }
 };
+
+void BuildScene4D(CustomGeometryBuilder builder, const Scene4D& scene)
+{
+    // Draw wireframe tesseracts
+    Vector4 tesseractVertices[16];
+    for (unsigned i = 0; i < 16; ++i)
+    {
+        tesseractVertices[i].x_ = !!(i & 0x1) ? 0.5f : -0.5f;
+        tesseractVertices[i].y_ = !!(i & 0x2) ? 0.5f : -0.5f;
+        tesseractVertices[i].z_ = !!(i & 0x4) ? 0.5f : -0.5f;
+        tesseractVertices[i].w_ = !!(i & 0x8) ? 0.5f : -0.5f;
+    }
+
+    SimpleVertex vertices[16];
+    for (const Tesseract& tesseract : scene.wireframeTesseracts_)
+    {
+        for (unsigned i = 0; i < 16; ++i)
+        {
+            const Vector4 vertexPosition = tesseractVertices[i] * tesseract.size_ + tesseract.position_;
+            vertices[i] = scene.ConvertWorldToProj(vertexPosition, tesseract.color_);
+        }
+        BuildWireframeTesseract(builder, vertices, { 0.03f, 0.02f } );
+    }
+
+    // Draw solid quads
+    for (const Quad& quad : scene.solidQuads_)
+    {
+        static const Vector2 offsets[4] = { { -0.5f, -0.5f }, { 0.5f, -0.5f }, { 0.5f, 0.5f }, { -0.5f, 0.5f } };
+        SimpleVertex vertices[4];
+        for (unsigned i = 0; i < 4; ++i)
+        {
+            const Vector4 vertexPosition = quad.position_ + quad.deltaX_ * offsets[i].x_ + quad.deltaY_ * offsets[i].y_;
+            vertices[i] = scene.ConvertWorldToProj(vertexPosition, quad.color_);
+        };
+        BuildSolidQuad(builder, vertices);
+    }
+}
 
 }

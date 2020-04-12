@@ -15,18 +15,26 @@ struct SimpleVertex
 
 struct CustomGeometryBuilder
 {
-    CustomGeometry* geometry_{};
+    CustomGeometry* solidGeometry_{};
+    CustomGeometry* transparentGeometry_{};
     void operator()(ea::span<const SimpleVertex> vertices, ea::span<const unsigned> indices)
     {
         assert(indices.size() % 3 == 0);
         for (unsigned triIndex = 0; triIndex < static_cast<unsigned>(indices.size() / 3); ++triIndex)
         {
-            for (unsigned i = 0; i < 3; ++i)
-            {
-                const SimpleVertex& vertex = vertices[indices[triIndex * 3 + i]];
-                geometry_->DefineVertex(vertex.position_);
-                geometry_->DefineColor(vertex.color_);
-            }
+            const SimpleVertex& v0 = vertices[indices[triIndex * 3 + 0]];
+            const SimpleVertex& v1 = vertices[indices[triIndex * 3 + 1]];
+            const SimpleVertex& v2 = vertices[indices[triIndex * 3 + 2]];
+
+            const bool hasTransparency = v0.color_.a_ < 1.0f || v1.color_.a_ < 1.0f || v2.color_.a_ < 1.0f;
+            CustomGeometry* geometry = hasTransparency ? transparentGeometry_ : solidGeometry_;
+
+            geometry->DefineVertex(v0.position_);
+            geometry->DefineColor(v0.color_);
+            geometry->DefineVertex(v1.position_);
+            geometry->DefineColor(v1.color_);
+            geometry->DefineVertex(v2.position_);
+            geometry->DefineColor(v2.color_);
         }
     }
 };
