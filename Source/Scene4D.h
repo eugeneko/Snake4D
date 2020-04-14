@@ -12,6 +12,9 @@ namespace Urho3D
 
 struct ColorTriplet
 {
+    ColorTriplet(const Color& color) : base_(color), red_(color), blue_(color) {}
+    ColorTriplet(const Color& base, const Color& red, const Color& blue) : base_(base), red_(red), blue_(blue) {}
+
     Color base_;
     Color red_;
     Color blue_;
