@@ -1,6 +1,7 @@
 #include "GeometryBuilder.h"
 #include "Math4D.h"
 #include "Scene4D.h"
+#include "GridCamera4D.h"
 
 #include <Urho3D/Urho3DAll.h>
 
@@ -226,7 +227,7 @@ private:
     WeakPtr<Camera> camera_;
 };
 
-enum class RelativeRotation4D
+enum class UserAction
 {
     None,
     Left,
@@ -234,15 +235,10 @@ enum class RelativeRotation4D
     Up,
     Down,
     Red,
-    Blue
-};
+    Blue,
+    XRoll,
 
-struct RotationDelta4D
-{
-    int axis1_{};
-    int axis2_{};
-    float angle_{};
-    Matrix4x5 AsMatrix(float factor) const { return angle_ != 0.0f ? Matrix4x5::MakeRotation(axis1_, axis2_, factor * angle_) : Matrix4x5::MakeIdentity(); }
+    Count
 };
 
 struct RenderSettings
@@ -250,60 +246,6 @@ struct RenderSettings
     float cameraTranslationSpeed_{ 1.0f };
     float cameraRotationSpeed_{ 3.0f };
     float snakeMovementSpeed_{ 6.0f };
-};
-
-Vector4 IndexToPosition(const IntVector4& cell)
-{
-    return IntVectorToVector4(cell) + Vector4::ONE * 0.5f;
-}
-
-class GridCamera4D
-{
-public:
-    void Reset(const IntVector4& position, const IntVector4& direction, const Matrix4& rotation)
-    {
-        currentDirection_ = direction;
-
-        previousPosition_ = position;
-        currentPosition_ = position;
-
-        previousRotation_ = { rotation, Vector4::ZERO };
-        currentRotation_ = { rotation, Vector4::ZERO };
-        rotationDelta_ = {};
-    }
-
-    void Step(const RotationDelta4D& delta)
-    {
-        rotationDelta_ = delta;
-
-        // TODO: Round matrix to integers
-        previousRotation_ = currentRotation_;
-        currentRotation_ = currentRotation_ * rotationDelta_.AsMatrix(1.0f);
-        currentDirection_ = RoundVector4(currentRotation_ * Vector4(0, 0, 1, 0));
-
-        previousPosition_ = currentPosition_;
-        currentPosition_ = currentPosition_ + currentDirection_;
-    }
-
-    Matrix4x5 GetViewMatrix(float translationBlendFactor, float rotationBlendFactor) const
-    {
-        const Vector4 cameraPosition = Lerp(
-            IndexToPosition(previousPosition_), IndexToPosition(currentPosition_), translationBlendFactor);
-        const Matrix4x5 cameraRotation = previousRotation_ * rotationDelta_.AsMatrix(rotationBlendFactor);
-        return cameraRotation.FastInverted() * Matrix4x5::MakeTranslation(-cameraPosition);
-    }
-
-    const IntVector4& GetCurrentPosition() const { return currentPosition_; }
-
-private:
-    IntVector4 currentDirection_{};
-
-    IntVector4 previousPosition_;
-    IntVector4 currentPosition_;
-
-    Matrix4x5 previousRotation_;
-    Matrix4x5 currentRotation_;
-    RotationDelta4D rotationDelta_;
 };
 
 class GameWorld
@@ -404,40 +346,26 @@ public:
         scene.wireframeTesseracts_.push_back(Tesseract{ IndexToPosition(targetPosition_), Vector4::ONE * 0.6f, targetColor });
     }
 
-    void SetNextRotation(RelativeRotation4D rotation)
+    void SetNextAction(UserAction action)
     {
-        nextRotation_ = rotation;
+        nextAction_ = action;
     }
 
     void Tick()
     {
-        // Get orientation increment
-        RotationDelta4D rotationDelta{};
-        switch (nextRotation_)
-        {
-        case RelativeRotation4D::Left:
-            rotationDelta = { 0, 2, -90.0f };
-            break;
-        case RelativeRotation4D::Right:
-            rotationDelta = { 0, 2, 90.0f };
-            break;
-        case RelativeRotation4D::Up:
-            rotationDelta = { 1, 2, 90.0f };
-            break;
-        case RelativeRotation4D::Down:
-            rotationDelta = { 1, 2, -90.0f };
-            break;
-        case RelativeRotation4D::Red:
-            rotationDelta = { 0, 3, -90.0f };
-            break;
-        case RelativeRotation4D::Blue:
-            rotationDelta = { 0, 3, 90.0f };
-            break;
-        case RelativeRotation4D::None:
-        default:
-            break;
-        }
-        nextRotation_ = RelativeRotation4D::None;
+        static const RotationDelta4D rotations[static_cast<unsigned>(UserAction::Count)] = {
+            { 0, 1,   0.0f }, // None
+            { 0, 2, -90.0f }, // Left
+            { 0, 2,  90.0f }, // Right
+            { 1, 2,  90.0f }, // Up
+            { 1, 2, -90.0f }, // Down
+            { 2, 3,  90.0f }, // Red
+            { 2, 3, -90.0f }, // Blue
+            { 0, 3,  90.0f }, // XRoll
+        };
+
+        const RotationDelta4D rotationDelta = rotations[static_cast<unsigned>(nextAction_)];
+        nextAction_ = UserAction::None;
 
         camera_.Step(rotationDelta);
 
@@ -452,7 +380,7 @@ private:
 
     GridCamera4D camera_;
 
-    RelativeRotation4D nextRotation_{};
+    UserAction nextAction_{};
 
     ea::vector<IntVector4> snake_;
     ea::vector<IntVector4> previousSnake_;
@@ -498,17 +426,19 @@ void MainApplication::Start()
         auto input = context_->GetSubsystem<Input>();
 
         if (input->GetKeyPress(KEY_A))
-            gameWorld_.SetNextRotation(RelativeRotation4D::Left);
+            gameWorld_.SetNextAction(UserAction::Left);
         if (input->GetKeyPress(KEY_D))
-            gameWorld_.SetNextRotation(RelativeRotation4D::Right);
+            gameWorld_.SetNextAction(UserAction::Right);
         if (input->GetKeyPress(KEY_W))
-            gameWorld_.SetNextRotation(RelativeRotation4D::Up);
+            gameWorld_.SetNextAction(UserAction::Up);
         if (input->GetKeyPress(KEY_S))
-            gameWorld_.SetNextRotation(RelativeRotation4D::Down);
+            gameWorld_.SetNextAction(UserAction::Down);
         if (input->GetKeyPress(KEY_Q))
-            gameWorld_.SetNextRotation(RelativeRotation4D::Red);
+            gameWorld_.SetNextAction(UserAction::Red);
         if (input->GetKeyPress(KEY_E))
-            gameWorld_.SetNextRotation(RelativeRotation4D::Blue);
+            gameWorld_.SetNextAction(UserAction::Blue);
+        if (input->GetKeyPress(KEY_SPACE))
+            gameWorld_.SetNextAction(UserAction::XRoll);
 
         // Tick scene
         if (!paused_)
