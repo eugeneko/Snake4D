@@ -40,9 +40,10 @@ public:
 
     void Reset()
     {
+        const IntVector4 previousPosition{ size_ / 2, size_ / 2, size_ * 1 / 4 - 1, size_ / 2 };
         snake_.clear();
-        snake_.push_back({ size_ / 2, size_ / 2, size_ * 1 / 4, size_ / 2 });
-        snake_.push_back({ size_ / 2, size_ / 2, size_ * 1 / 4 - 1, size_ / 2 });
+        for (int i = 0; i < 3; ++i)
+            snake_.push_back({ size_ / 2, size_ / 2, size_ * 1 / 4 - i, size_ / 2 });
         previousSnake_ = snake_;
 
         camera_.Reset(snake_.front(), { 0, 0, 1, 0 }, Matrix4::IDENTITY);

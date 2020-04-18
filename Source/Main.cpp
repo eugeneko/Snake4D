@@ -5,6 +5,78 @@
 
 using namespace Urho3D;
 
+class GameSession : public Object
+{
+    URHO3D_OBJECT(GameSession, Object);
+
+public:
+    GameSession(Context* context) : Object(context) {}
+
+    void SetUpdatePeriod(float period) { updatePeriod_ = period; }
+
+    void SetPaused(bool paused) { paused_ = paused; }
+
+    void Update(float timeStep)
+    {
+        DoUpdate();
+
+        if (!paused_)
+            timeAccumulator_ += timeStep;
+
+        while (timeAccumulator_ >= updatePeriod_)
+        {
+            timeAccumulator_ -= updatePeriod_;
+            DoTick();
+        }
+    }
+
+    void Render(Scene4D& scene4D)
+    {
+        sim_.Render(scene4D, timeAccumulator_ / updatePeriod_);
+    }
+
+private:
+    virtual void DoUpdate() = 0;
+    virtual void DoTick() { sim_.Tick(); }
+
+    bool paused_{};
+    float updatePeriod_{ 1.0f };
+    float timeAccumulator_{};
+
+protected:
+    GameSimulation sim_{ 11 };
+};
+
+class ClassicGameSession : public GameSession
+{
+    URHO3D_OBJECT(ClassicGameSession, GameSession);
+
+public:
+    ClassicGameSession(Context* context) : GameSession(context) {}
+
+private:
+    virtual void DoUpdate() override
+    {
+        // Apply input
+        auto input = context_->GetSubsystem<Input>();
+
+        if (input->GetKeyPress(KEY_A))
+            sim_.SetNextAction(UserAction::Left);
+        if (input->GetKeyPress(KEY_D))
+            sim_.SetNextAction(UserAction::Right);
+        if (input->GetKeyPress(KEY_W))
+            sim_.SetNextAction(UserAction::Up);
+        if (input->GetKeyPress(KEY_S))
+            sim_.SetNextAction(UserAction::Down);
+        if (input->GetKeyPress(KEY_Q))
+            sim_.SetNextAction(UserAction::Red);
+        if (input->GetKeyPress(KEY_E))
+            sim_.SetNextAction(UserAction::Blue);
+        if (input->GetKeyPress(KEY_SPACE))
+            sim_.SetNextAction(UserAction::XRoll);
+    }
+};
+
 using StartCallback = std::function<void()>;
 using PausedCallback = std::function<void(bool paused)>;
 
@@ -95,6 +167,12 @@ private:
             [this](StringHash eventType, VariantMap& eventData)
         {
             TogglePaused();
+        });
+
+        SubscribeToEvent(newGameButton, E_PRESSED,
+            [this](StringHash eventType, VariantMap& eventData)
+        {
+            StartGame();
         });
 
         SubscribeToEvent(exitButton, E_PRESSED,
@@ -199,7 +277,8 @@ public:
         SubscribeToEvent(E_UPDATE, [=](StringHash eventType, VariantMap& eventData)
         {
             const float timeStep = eventData[Update::P_TIMESTEP].GetFloat();
-            renderCallback(timeStep, scene4D_);
+            if (!renderCallback(timeStep, scene4D_))
+                return;
 
             solidGeometry->BeginGeometry(0, TRIANGLE_LIST);
             transparentGeometry->BeginGeometry(0, TRIANGLE_LIST);
@@ -235,14 +314,7 @@ public:
 private:
     SharedPtr<GameUI> gameUI_;
     SharedPtr<GameRenderer> gameRenderer_;
-
-    GameSimulation gameSimulation_;
-
-    bool paused_{};
-
-    float updatePeriod_{ 1.0f };
-    float timeAccumulator_{};
-
+    SharedPtr<GameSession> gameSession_;
 };
 
 void MainApplication::Setup()
@@ -259,47 +331,23 @@ void MainApplication::Start()
 
     auto renderCallback = [=](float timeStep, Scene4D& scene4D)
     {
-        // Apply input
-        auto input = context_->GetSubsystem<Input>();
+        if (!gameSession_)
+            return false;
 
-        if (input->GetKeyPress(KEY_A))
-            gameSimulation_.SetNextAction(UserAction::Left);
-        if (input->GetKeyPress(KEY_D))
-            gameSimulation_.SetNextAction(UserAction::Right);
-        if (input->GetKeyPress(KEY_W))
-            gameSimulation_.SetNextAction(UserAction::Up);
-        if (input->GetKeyPress(KEY_S))
-            gameSimulation_.SetNextAction(UserAction::Down);
-        if (input->GetKeyPress(KEY_Q))
-            gameSimulation_.SetNextAction(UserAction::Red);
-        if (input->GetKeyPress(KEY_E))
-            gameSimulation_.SetNextAction(UserAction::Blue);
-        if (input->GetKeyPress(KEY_SPACE))
-            gameSimulation_.SetNextAction(UserAction::XRoll);
-
-        // Tick scene
-        if (!paused_)
-            timeAccumulator_ += timeStep;
-
-        while (timeAccumulator_ >= updatePeriod_)
-        {
-            timeAccumulator_ -= updatePeriod_;
-            gameSimulation_.Tick();
-        }
-
-        // Update scene
-        gameSimulation_.Render(scene4D, timeAccumulator_ / updatePeriod_);
+        gameSession_->Update(timeStep);
+        gameSession_->Render(scene4D);
         return true;
     };
 
     auto startCallback = [=]()
     {
-        gameSimulation_ = GameSimulation{ 11 };
+        gameSession_ = MakeShared<ClassicGameSession>(context_);
     };
 
     auto pauseCallback = [=](bool paused)
     {
-        paused_ = paused;
+        if (gameSession_)
+            gameSession_->SetPaused(paused);
     };
 
     gameUI_ = MakeShared<GameUI>(context_);
