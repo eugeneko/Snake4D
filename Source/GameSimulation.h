@@ -76,14 +76,37 @@ public:
             { 0, 3,  90.0f }, // XRoll
         };
 
+        // Apply user action
         const RotationDelta4D rotationDelta = rotations[static_cast<unsigned>(nextAction_)];
         nextAction_ = UserAction::None;
-
         camera_.Step(rotationDelta);
 
+        // Store previous state
         previousSnake_ = snake_;
-        snake_.push_front(camera_.GetCurrentPosition());
-        snake_.pop_back();
+
+        // Update snake
+        const IntVector4 nextHeadPosition = camera_.GetCurrentPosition();
+        snake_.push_front(nextHeadPosition);
+
+        if (nextHeadPosition == targetPosition_)
+        {
+            // Generate new target position
+            auto newTarget = GetAvailablePosition(snake_);
+            if (!newTarget.second)
+            {
+                // TODO: This is nearly impossible
+                return;
+            }
+
+            targetPosition_ = newTarget.first;
+
+            // Snake grows, keep tail segment
+        }
+        else
+        {
+            // Remove tail segment because length didn't change
+            snake_.pop_back();
+        }
     }
 
 private:
@@ -106,7 +129,7 @@ private:
 
         const unsigned oldLength = previousSnake_.size();
         const unsigned newLength = snake_.size();
-        const unsigned commonLength = ea::max(oldLength, newLength);
+        const unsigned commonLength = ea::min(oldLength, newLength);
         for (unsigned i = 0; i < commonLength; ++i)
         {
             const Vector4 previousPosition = IndexToPosition(previousSnake_[i]);
@@ -175,6 +198,35 @@ private:
         // Render target
         static const ColorTriplet targetColor{ Color::GREEN, { 1.0f, 1.0f, 0.0f }, { 0.0f, 1.0f, 1.0f } };
         scene.wireframeTesseracts_.push_back(Tesseract{ IndexToPosition(targetPosition_), Vector4::ONE * 0.6f, targetColor });
+    }
+
+    ea::pair<IntVector4, bool> GetAvailablePosition(const ea::vector<IntVector4>& blockedPositions) const
+    {
+        static const int maxRetry = 10;
+        for (int i = 0; i < maxRetry; ++i)
+        {
+            const IntVector4 position = RandomIntVector4(size_);
+            if (!blockedPositions.contains(position))
+                return { position, true };
+        }
+
+        for (int w = 0; w < size_; ++w)
+        {
+            for (int z = 0; z < size_; ++z)
+            {
+                for (int y = 0; y < size_; ++y)
+                {
+                    for (int x = 0; x < size_; ++x)
+                    {
+                        const IntVector4 position{ x, y, z, w };
+                        if (!blockedPositions.contains(position))
+                            return { position, true };
+                    }
+                }
+            }
+        }
+
+        return { {}, false };
     }
 
     int size_{};

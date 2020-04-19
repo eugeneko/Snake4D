@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Urho3D/Math/MathDefs.h>
 #include <Urho3D/Math/Matrix4.h>
 #include <Urho3D/Math/Vector4.h>
 
@@ -15,6 +16,16 @@ IntVector4 operator + (const IntVector4& lhs, const IntVector4& rhs)
     IntVector4 result;
     for (int i = 0; i < 4; ++i)
         result[i] = lhs[i] + rhs[i];
+    return result;
+}
+
+IntVector4 RandomIntVector4(int range)
+{
+    IntVector4 result;
+    result[0] = Random(range);
+    result[1] = Random(range);
+    result[2] = Random(range);
+    result[3] = Random(range);
     return result;
 }
 

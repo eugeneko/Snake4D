@@ -175,6 +175,9 @@ private:
             StartGame();
         });
 
+        tutorialButton->SetEnabled(false);
+        demoButton->SetEnabled(false);
+
         SubscribeToEvent(exitButton, E_PRESSED,
             [this](StringHash eventType, VariantMap& eventData)
         {
@@ -257,7 +260,8 @@ public:
         {
             zone->SetAmbientColor(Color::WHITE);
             zone->SetBoundingBox(BoundingBox(-1000, 1000));
-            zone->SetFogColor(Color(0x00BFFF, Color::ARGB));
+            //zone->SetFogColor(Color(0x00BFFF, Color::ARGB));
+            zone->SetFogColor(Color(0x000000, Color::ARGB));
         }
 
         // Create actor
