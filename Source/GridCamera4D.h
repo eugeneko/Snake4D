@@ -46,13 +46,33 @@ public:
         currentPosition_ = currentPosition_ + currentDirection_;
     }
 
+    Vector4 GetWorldPosition(float blendFactor) const
+    {
+        return Lerp(IndexToPosition(previousPosition_), IndexToPosition(currentPosition_), blendFactor);
+    }
+
+    Matrix4x5 GetWorldRotation(float blendFactor) const
+    {
+        return previousRotation_ * rotationDelta_.AsMatrix(blendFactor);
+    }
+
     Matrix4x5 GetViewMatrix(float translationBlendFactor, float rotationBlendFactor) const
     {
-        const Vector4 cameraPosition = Lerp(
-            IndexToPosition(previousPosition_), IndexToPosition(currentPosition_), translationBlendFactor);
-        const Matrix4x5 cameraRotation = previousRotation_ * rotationDelta_.AsMatrix(rotationBlendFactor);
+        const Vector4 cameraPosition = GetWorldPosition(translationBlendFactor);
+        const Matrix4x5 cameraRotation = GetWorldRotation(rotationBlendFactor);
         return cameraRotation.FastInverted() * Matrix4x5::MakeTranslation(-cameraPosition);
     }
+
+    Matrix4x5 GetModelMatrix(float translationBlendFactor, float rotationBlendFactor) const
+    {
+        const Vector4 cameraPosition = GetWorldPosition(translationBlendFactor);
+        const Matrix4x5 cameraRotation = GetWorldRotation(rotationBlendFactor);
+        return Matrix4x5::MakeTranslation(cameraPosition) * cameraRotation;
+    }
+
+    Matrix4x5 GetCurrentViewMatrix() const { return GetViewMatrix(1.0f, 1.0f); }
+
+    Matrix4x5 GetCurrentModelMatrix() const { return GetModelMatrix(1.0f, 1.0f); }
 
     const IntVector4& GetCurrentPosition() const { return currentPosition_; }
 

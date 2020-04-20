@@ -41,6 +41,15 @@ struct Quad
     ColorTriplet color_;
 };
 
+struct Cube
+{
+    Vector4 position_;
+    Vector4 deltaX_;
+    Vector4 deltaY_;
+    Vector4 deltaZ_;
+    ColorTriplet color_;
+};
+
 SimpleVertex ProjectVertex4DTo3D(const Vector4& position, const Vector3& focusPositionViewSpace, float hyperPositionOffset,
     const ColorTriplet& color, float hyperColorOffset)
 {
@@ -65,12 +74,14 @@ struct Scene4D
     Matrix4x5 cameraTransform_;
     ea::vector<Tesseract> wireframeTesseracts_;
     ea::vector<Quad> solidQuads_;
+    ea::vector<Cube> solidCubes_;
 
     void Reset(const Matrix4x5& camera)
     {
         cameraTransform_ = camera;
         wireframeTesseracts_.clear();
         solidQuads_.clear();
+        solidCubes_.clear();
     }
 
     SimpleVertex ConvertWorldToProj(const Vector4& position, const ColorTriplet& color) const
@@ -107,8 +118,8 @@ void BuildScene4D(CustomGeometryBuilder builder, const Scene4D& scene)
         BuildWireframeTesseract(builder, vertices, { 0.03f, 0.02f } );
     }
 
-    // Draw solid quads
-    for (const Quad& quad : scene.solidQuads_)
+    // Helper to draw quads
+    auto drawQuad = [](CustomGeometryBuilder builder, const Scene4D& scene, const Quad& quad)
     {
         static const Vector2 offsets[4] = { { -0.5f, -0.5f }, { 0.5f, -0.5f }, { 0.5f, 0.5f }, { -0.5f, 0.5f } };
         SimpleVertex vertices[4];
@@ -118,6 +129,21 @@ void BuildScene4D(CustomGeometryBuilder builder, const Scene4D& scene)
             vertices[i] = scene.ConvertWorldToProj(vertexPosition, quad.color_);
         };
         BuildSolidQuad(builder, vertices);
+    };
+
+    // Draw solid quads
+    for (const Quad& quad : scene.solidQuads_)
+        drawQuad(builder, scene, quad);
+
+    // Draw solid cubes
+    for (const Cube& cube : scene.solidCubes_)
+    {
+        drawQuad(builder, scene, Quad{ cube.position_ + cube.deltaX_ * 0.5f, cube.deltaY_, cube.deltaZ_, cube.color_ });
+        drawQuad(builder, scene, Quad{ cube.position_ - cube.deltaX_ * 0.5f, cube.deltaY_, cube.deltaZ_, cube.color_ });
+        drawQuad(builder, scene, Quad{ cube.position_ + cube.deltaY_ * 0.5f, cube.deltaX_, cube.deltaZ_, cube.color_ });
+        drawQuad(builder, scene, Quad{ cube.position_ - cube.deltaY_ * 0.5f, cube.deltaX_, cube.deltaZ_, cube.color_ });
+        drawQuad(builder, scene, Quad{ cube.position_ + cube.deltaZ_ * 0.5f, cube.deltaX_, cube.deltaY_, cube.color_ });
+        drawQuad(builder, scene, Quad{ cube.position_ - cube.deltaZ_ * 0.5f, cube.deltaX_, cube.deltaY_, cube.color_ });
     }
 }
 

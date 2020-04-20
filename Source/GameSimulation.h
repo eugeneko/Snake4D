@@ -25,11 +25,13 @@ struct RenderSettings
     float cameraTranslationSpeed_{ 1.0f };
     float cameraRotationSpeed_{ 3.0f };
     float snakeMovementSpeed_{ 6.0f };
+    float guidelineSize_{ 0.2f };
 
     Color snakeBaseColor_{ Color::WHITE };
     Color snakeRedColor_{ Color::RED };
     Color snakeBlueColor_{ Color::BLUE };
     Color borderColor_{ 1.0f, 1.0f, 1.0f, 0.3f };
+    Color guidelineColor_{ 1.0f, 1.0f, 1.0f, 0.3f };
 };
 
 class GameSimulation
@@ -54,7 +56,8 @@ public:
     {
         ResetScene(scene, blendFactor);
         RenderAnimatedSnake(scene, blendFactor);
-        RenderSceneBorders(scene, blendFactor);
+        RenderSceneBorders(scene);
+        RenderGuidelines(scene);
         RenderObjects(scene, blendFactor);
     }
 
@@ -145,7 +148,7 @@ private:
         }
     }
 
-    void RenderSceneBorders(Scene4D& scene, float blendFactor) const
+    void RenderSceneBorders(Scene4D& scene) const
     {
         const ColorTriplet borderColor = renderSettings_.borderColor_;
 
@@ -189,6 +192,63 @@ private:
                         scene.solidQuads_.push_back(Quad{ position, xAxis * 0.8f, yAxis * 0.8f, borderColor });
                     }
                 }
+            }
+        }
+    }
+
+    void RenderGuidelines(Scene4D& scene) const
+    {
+        const ColorTriplet guidelineColor{ renderSettings_.guidelineColor_ };
+
+        const Vector4 viewSpaceTargetPosition = camera_.GetCurrentViewMatrix() * IndexToPosition(targetPosition_);
+        const Matrix4x5 viewToWorldSpaceTransform = camera_.GetCurrentModelMatrix();
+
+        const Vector4 xAxis = viewToWorldSpaceTransform.rotation_ * Vector4(1.0f, 0.0f, 0.0f, 0.0f);
+        const Vector4 yAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 1.0f, 0.0f, 0.0f);
+        const Vector4 zAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 0.0f, 1.0f, 0.0f);
+        const float size = renderSettings_.guidelineSize_;
+
+        // Helper to create guideline element
+        const auto createElement = [&](float x, float y, float z)
+        {
+            const Vector4 viewSpacePosition{ x, y, z, 0.0f };
+            const Vector4 worldSpacePosition = viewToWorldSpaceTransform * viewSpacePosition;
+            const Cube cube{ worldSpacePosition, size * xAxis, size * yAxis, size * zAxis, guidelineColor };
+            scene.solidCubes_.push_back(cube);
+        };
+
+        // Create forward guidelines
+        const int zDeltaInt = RoundToInt(viewSpaceTargetPosition.z_);
+        const float zDelta = static_cast<float>(zDeltaInt);
+        if (zDeltaInt > 0)
+        {
+            for (int i = 1; i <= zDeltaInt; ++i)
+            {
+                const float z = static_cast<float>(i);
+                createElement(0.0f, 0.0f, z);
+            }
+        }
+
+        // Create horizontal guidelines
+        const int xDeltaInt = RoundToInt(viewSpaceTargetPosition.x_);
+        const float xDelta = static_cast<float>(xDeltaInt);
+        if (xDeltaInt != 0)
+        {
+            for (int i = 1; i <= Abs(xDeltaInt); ++i)
+            {
+                const float x = static_cast<float>(i * Sign(xDeltaInt));
+                createElement(x, 0.0f, zDelta);
+            }
+        }
+
+        // Create vertical guidelines
+        const int yDelta = RoundToInt(viewSpaceTargetPosition.y_);
+        if (yDelta != 0)
+        {
+            for (int i = 1; i <= Abs(yDelta); ++i)
+            {
+                const float y = static_cast<float>(i * Sign(yDelta));
+                createElement(xDelta, y, zDelta);
             }
         }
     }
