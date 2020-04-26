@@ -63,7 +63,8 @@ public:
 
     void SetNextAction(UserAction action)
     {
-        nextAction_ = action;
+        if (!gameOver_)
+            nextAction_ = action;
     }
 
     void Tick()
@@ -80,14 +81,18 @@ public:
         };
 
         // Apply user action
+        const bool move = !gameOver_;
         const RotationDelta4D rotationDelta = rotations[static_cast<unsigned>(nextAction_)];
         nextAction_ = UserAction::None;
-        camera_.Step(rotationDelta);
+        camera_.Step(rotationDelta, move);
 
         // Store previous state
         previousSnake_ = snake_;
 
-        // Update snake
+        if (gameOver_)
+            return;
+
+        // Move snake
         const IntVector4 nextHeadPosition = camera_.GetCurrentPosition();
         snake_.push_front(nextHeadPosition);
 
@@ -110,9 +115,28 @@ public:
             // Remove tail segment because length didn't change
             snake_.pop_back();
         }
+
+        // Check for collision
+        if (!IsValidHeadPosition(snake_.front()))
+            gameOver_ = true;
     }
 
 private:
+    bool IsValidHeadPosition(const IntVector4& position)
+    {
+        const IntVector4 boxBegin{ 0, 0, 0, 0 };
+        const IntVector4 boxEnd{ size_ - 1, size_ - 1, size_ - 1, size_ - 1 };
+        if (!IsInside(position, boxBegin, boxEnd))
+            return false;
+
+        for (unsigned i = 1; i < snake_.size(); ++i)
+        {
+            if (position == snake_[i])
+                return false;
+        }
+        return true;
+    }
+
     void ResetScene(Scene4D& scene, float blendFactor) const
     {
         // Update camera
@@ -295,6 +319,7 @@ private:
     GridCamera4D camera_;
 
     UserAction nextAction_{};
+    bool gameOver_{};
 
     ea::vector<IntVector4> snake_;
     ea::vector<IntVector4> previousSnake_;

@@ -11,7 +11,7 @@ namespace Urho3D
 
 using IntVector4 = ea::array<int, 4>;
 
-IntVector4 operator + (const IntVector4& lhs, const IntVector4& rhs)
+inline IntVector4 operator + (const IntVector4& lhs, const IntVector4& rhs)
 {
     IntVector4 result;
     for (int i = 0; i < 4; ++i)
@@ -19,7 +19,7 @@ IntVector4 operator + (const IntVector4& lhs, const IntVector4& rhs)
     return result;
 }
 
-IntVector4 RandomIntVector4(int range)
+inline IntVector4 RandomIntVector4(int range)
 {
     IntVector4 result;
     result[0] = Random(range);
@@ -29,7 +29,17 @@ IntVector4 RandomIntVector4(int range)
     return result;
 }
 
-Vector4 IntVectorToVector4(const IntVector4& index)
+inline bool IsInside(const IntVector4& value, const IntVector4& begin, const IntVector4& end)
+{
+    for (int i = 0; i < 4; ++i)
+    {
+        if (begin[i] > value[i] || value[i] >= end[i])
+            return false;
+    }
+    return true;
+}
+
+inline Vector4 IntVectorToVector4(const IntVector4& index)
 {
     float coords[4];
     for (int i = 0; i < 4; ++i)
@@ -37,7 +47,7 @@ Vector4 IntVectorToVector4(const IntVector4& index)
     return Vector4{ coords };
 }
 
-IntVector4 RoundVector4(const Vector4& vec)
+inline IntVector4 RoundVector4(const Vector4& vec)
 {
     return { RoundToInt(vec.x_), RoundToInt(vec.y_), RoundToInt(vec.z_), RoundToInt(vec.w_) };
 }
@@ -83,7 +93,7 @@ struct Matrix4x5
     }
 };
 
-Matrix4x5 Lerp(const Matrix4x5& lhs, const Matrix4x5& rhs, float factor)
+inline Matrix4x5 Lerp(const Matrix4x5& lhs, const Matrix4x5& rhs, float factor)
 {
     Matrix4x5 result;
     result.rotation_ = Lerp(lhs.rotation_, rhs.rotation_, factor);
@@ -101,14 +111,14 @@ Matrix4x5 Lerp(const Matrix4x5& lhs, const Matrix4x5& rhs, float factor)
     return result;
 }
 
-Vector4 MakeDirection(unsigned axis, float sign)
+inline Vector4 MakeDirection(unsigned axis, float sign)
 {
     Vector4 direction{};
     direction[axis] = sign;
     return direction;
 }
 
-ea::pair<int, int> FlipAxisPair(int axis1, int axis2)
+inline ea::pair<int, int> FlipAxisPair(int axis1, int axis2)
 {
     assert(axis1 != axis2);
     assert(0 <= axis1 && axis1 < 4);
@@ -131,7 +141,7 @@ ea::pair<int, int> FlipAxisPair(int axis1, int axis2)
     return results[axis1][axis2 - 1];
 }
 
-int FindHyperAxis(const Matrix4& rotation)
+inline int FindHyperAxis(const Matrix4& rotation)
 {
     int axis = 0;
     float maxScore = -1;

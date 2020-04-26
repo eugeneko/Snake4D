@@ -13,7 +13,7 @@ struct RotationDelta4D
     Matrix4x5 AsMatrix(float factor) const { return angle_ != 0.0f ? Matrix4x5::MakeRotation(axis1_, axis2_, factor * angle_) : Matrix4x5::MakeIdentity(); }
 };
 
-Vector4 IndexToPosition(const IntVector4& cell)
+inline Vector4 IndexToPosition(const IntVector4& cell)
 {
     return IntVectorToVector4(cell) + Vector4::ONE * 0.5f;
 }
@@ -33,7 +33,7 @@ public:
         rotationDelta_ = {};
     }
 
-    void Step(const RotationDelta4D& delta)
+    void Step(const RotationDelta4D& delta, bool move)
     {
         rotationDelta_ = delta;
 
@@ -43,7 +43,8 @@ public:
         currentDirection_ = RoundVector4(currentRotation_ * Vector4(0, 0, 1, 0));
 
         previousPosition_ = currentPosition_;
-        currentPosition_ = currentPosition_ + currentDirection_;
+        if (move)
+            currentPosition_ = currentPosition_ + currentDirection_;
     }
 
     Vector4 GetWorldPosition(float blendFactor) const

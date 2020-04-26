@@ -50,7 +50,7 @@ struct Cube
     ColorTriplet color_;
 };
 
-SimpleVertex ProjectVertex4DTo3D(const Vector4& position, const Vector3& focusPositionViewSpace, float hyperPositionOffset,
+inline SimpleVertex ProjectVertex4DTo3D(const Vector4& position, const Vector3& focusPositionViewSpace, float hyperPositionOffset,
     const ColorTriplet& color, float hyperColorOffset)
 {
     const Vector3 position3D = static_cast<Vector3>(position);
@@ -95,7 +95,7 @@ struct Scene4D
     }
 };
 
-void BuildScene4D(CustomGeometryBuilder builder, const Scene4D& scene)
+inline void BuildScene4D(CustomGeometryBuilder builder, const Scene4D& scene)
 {
     // Draw wireframe tesseracts
     Vector4 tesseractVertices[16];
