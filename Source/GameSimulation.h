@@ -125,7 +125,7 @@ private:
     bool IsValidHeadPosition(const IntVector4& position)
     {
         const IntVector4 boxBegin{ 0, 0, 0, 0 };
-        const IntVector4 boxEnd{ size_ - 1, size_ - 1, size_ - 1, size_ - 1 };
+        const IntVector4 boxEnd{ size_, size_, size_, size_ };
         if (!IsInside(position, boxBegin, boxEnd))
             return false;
 
