@@ -1,7 +1,10 @@
 #pragma once
+
 #include "Math4D.h"
 #include "Scene4D.h"
 #include "GridCamera4D.h"
+
+#include <cmath>
 
 namespace Urho3D
 {
@@ -26,6 +29,11 @@ struct RenderSettings
     float cameraRotationSpeed_{ 3.0f };
     float snakeMovementSpeed_{ 6.0f };
     float guidelineSize_{ 0.2f };
+
+    float deathShakeMagnitude_{ 0.3f };
+    float deathShakeFrequency_{ 11.0f };
+    float deathShakeSaturation_{ 8.0f };
+    float deathCollapseSpeed_{ 3.0f };
 
     Color snakeBaseColor_{ Color::WHITE };
     Color snakeRedColor_{ Color::RED };
@@ -84,6 +92,7 @@ public:
         const bool move = !gameOver_;
         const RotationDelta4D rotationDelta = rotations[static_cast<unsigned>(nextAction_)];
         nextAction_ = UserAction::None;
+        deathAnimation_ = false;
         camera_.Step(rotationDelta, move);
 
         // Store previous state
@@ -118,7 +127,10 @@ public:
 
         // Check for collision
         if (!IsValidHeadPosition(snake_.front()))
+        {
             gameOver_ = true;
+            deathAnimation_ = true;
+        }
     }
 
 private:
@@ -146,6 +158,14 @@ private:
 
         // Reset scene
         scene.Reset(camera);
+
+        scene.cameraOffset_ = Vector3::ZERO;
+        if (deathAnimation_)
+        {
+            const float sine = Sin(blendFactor * renderSettings_.deathShakeFrequency_ * 360.0f);
+            const float exp = std::exp(-blendFactor * renderSettings_.deathShakeSaturation_);
+            scene.cameraOffset_.x_ = sine * exp * renderSettings_.deathShakeMagnitude_;
+        }
     }
 
     void RenderAnimatedSnake(Scene4D& scene, float blendFactor) const
@@ -159,10 +179,19 @@ private:
         const unsigned commonLength = ea::min(oldLength, newLength);
         for (unsigned i = 0; i < commonLength; ++i)
         {
+            // Hack to make head disappear when dead
+            const bool isHead = i == 0;
+            float size = 1.0f;
+            if (isHead && deathAnimation_)
+                size = ea::max(0.0f, 1.0f - blendFactor * renderSettings_.deathCollapseSpeed_);
+            else if (isHead && gameOver_)
+                size = 0.0f;
+
             const Vector4 previousPosition = IndexToPosition(previousSnake_[i]);
             const Vector4 currentPosition = IndexToPosition(snake_[i]);
             const Vector4 position = Lerp(previousPosition, currentPosition, snakeMovementFactor);
-            scene.wireframeTesseracts_.push_back(Tesseract{ position, Vector4::ONE, snakeColor });
+            if (size > M_EPSILON)
+                scene.wireframeTesseracts_.push_back(Tesseract{ position, size * Vector4::ONE, snakeColor });
         }
         for (unsigned i = commonLength; i < newLength; ++i)
         {
@@ -320,6 +349,7 @@ private:
 
     UserAction nextAction_{};
     bool gameOver_{};
+    bool deathAnimation_{};
 
     ea::vector<IntVector4> snake_;
     ea::vector<IntVector4> previousSnake_;

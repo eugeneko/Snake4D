@@ -291,6 +291,8 @@ public:
 
             solidGeometry->Commit();
             transparentGeometry->Commit();
+
+            camera_->GetNode()->SetPosition(scene4D_.cameraOffset_);
         });
 
         viewport_ = MakeShared<Viewport>(context_);

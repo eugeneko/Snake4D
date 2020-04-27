@@ -69,7 +69,8 @@ struct Scene4D
 {
     float hyperColorOffset_{ 0.5f };
     float hyperPositionOffset_{ 0.05f };
-    Vector3 focusPositionViewSpace_{ Vector3::ZERO };
+    Vector3 focusPositionViewSpace_;
+    Vector3 cameraOffset_;
 
     Matrix4x5 cameraTransform_;
     ea::vector<Tesseract> wireframeTesseracts_;
