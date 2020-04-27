@@ -28,7 +28,8 @@ struct RenderSettings
     float cameraTranslationSpeed_{ 1.0f };
     float cameraRotationSpeed_{ 3.0f };
     float snakeMovementSpeed_{ 6.0f };
-    float guidelineSize_{ 0.2f };
+    float openGuidelineSize_{ 0.2f };
+    float blockedGuidelineSize_{ 0.08f };
 
     float deathShakeMagnitude_{ 0.3f };
     float deathShakeFrequency_{ 11.0f };
@@ -134,7 +135,7 @@ public:
     }
 
 private:
-    bool IsValidHeadPosition(const IntVector4& position)
+    bool IsValidHeadPosition(const IntVector4& position) const
     {
         const IntVector4 boxBegin{ 0, 0, 0, 0 };
         const IntVector4 boxEnd{ size_, size_, size_, size_ };
@@ -259,13 +260,14 @@ private:
         const Vector4 xAxis = viewToWorldSpaceTransform.rotation_ * Vector4(1.0f, 0.0f, 0.0f, 0.0f);
         const Vector4 yAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 1.0f, 0.0f, 0.0f);
         const Vector4 zAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 0.0f, 1.0f, 0.0f);
-        const float size = renderSettings_.guidelineSize_;
 
         // Helper to create guideline element
         const auto createElement = [&](float x, float y, float z)
         {
             const Vector4 viewSpacePosition{ x, y, z, 0.0f };
             const Vector4 worldSpacePosition = viewToWorldSpaceTransform * viewSpacePosition;
+            const bool isValidLocation = IsValidHeadPosition(PositionToIndex(worldSpacePosition));
+            const float size = isValidLocation ? renderSettings_.openGuidelineSize_ : renderSettings_.blockedGuidelineSize_;
             const Cube cube{ worldSpacePosition, size * xAxis, size * yAxis, size * zAxis, guidelineColor };
             scene.solidCubes_.push_back(cube);
         };

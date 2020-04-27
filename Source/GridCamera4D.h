@@ -18,6 +18,16 @@ inline Vector4 IndexToPosition(const IntVector4& cell)
     return IntVectorToVector4(cell) + Vector4::ONE * 0.5f;
 }
 
+inline IntVector4 PositionToIndex(const Vector4& position)
+{
+    return {
+        RoundToInt(position.x_ - 0.5f),
+        RoundToInt(position.y_ - 0.5f),
+        RoundToInt(position.z_ - 0.5f),
+        RoundToInt(position.w_ - 0.5f)
+    };
+}
+
 class GridCamera4D
 {
 public:
