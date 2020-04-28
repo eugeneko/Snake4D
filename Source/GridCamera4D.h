@@ -50,7 +50,7 @@ public:
         // TODO: Round matrix to integers
         previousRotation_ = currentRotation_;
         currentRotation_ = currentRotation_ * rotationDelta_.AsMatrix(1.0f);
-        currentDirection_ = RoundVector4(currentRotation_ * Vector4(0, 0, 1, 0));
+        currentDirection_ = GetCurrentDirection();
 
         previousPosition_ = currentPosition_;
         if (move)
@@ -86,6 +86,8 @@ public:
     Matrix4x5 GetCurrentModelMatrix() const { return GetModelMatrix(1.0f, 1.0f); }
 
     const IntVector4& GetCurrentPosition() const { return currentPosition_; }
+
+    IntVector4 GetCurrentDirection() const { return RoundVector4(currentRotation_ * Vector4(0, 0, 1, 0)); }
 
 private:
     IntVector4 currentDirection_{};

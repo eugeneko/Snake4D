@@ -77,7 +77,20 @@ private:
     }
 };
 
-using StartCallback = std::function<void()>;
+class DemoGameSession : public GameSession
+{
+    URHO3D_OBJECT(DemoGameSession, GameSession);
+
+public:
+    DemoGameSession(Context* context) : GameSession(context) {}
+
+private:
+    virtual void DoUpdate() override
+    {
+    }
+};
+
+using StartCallback = std::function<void(StringHash sessionType)>;
 using PausedCallback = std::function<void(bool paused)>;
 
 class GameUI : public Object
@@ -94,7 +107,7 @@ public:
 
         CreateUI();
         if (startGame)
-            StartGame();
+            StartGame(ClassicGameSession::GetTypeStatic());
     }
 
     void TogglePaused()
@@ -113,10 +126,10 @@ public:
         }
     }
 
-    void StartGame()
+    void StartGame(StringHash sessionType)
     {
         state_ = State::Running;
-        startCallback_();
+        startCallback_(sessionType);
         pauseCallback_(false);
         window_->SetVisible(false);
     }
@@ -172,11 +185,16 @@ private:
         SubscribeToEvent(newGameButton, E_PRESSED,
             [this](StringHash eventType, VariantMap& eventData)
         {
-            StartGame();
+            StartGame(ClassicGameSession::GetTypeStatic());
         });
 
         tutorialButton->SetEnabled(false);
-        demoButton->SetEnabled(false);
+
+        SubscribeToEvent(demoButton, E_PRESSED,
+            [this](StringHash eventType, VariantMap& eventData)
+        {
+            StartGame(DemoGameSession::GetTypeStatic());
+        });
 
         SubscribeToEvent(exitButton, E_PRESSED,
             [this](StringHash eventType, VariantMap& eventData)
@@ -345,9 +363,12 @@ void MainApplication::Start()
         return true;
     };
 
-    auto startCallback = [=]()
+    auto startCallback = [=](StringHash sessionType)
     {
-        gameSession_ = MakeShared<ClassicGameSession>(context_);
+        if (sessionType == DemoGameSession::GetTypeStatic())
+            gameSession_ = MakeShared<DemoGameSession>(context_);
+        else
+            gameSession_ = MakeShared<ClassicGameSession>(context_);
     };
 
     auto pauseCallback = [=](bool paused)

@@ -19,6 +19,30 @@ inline IntVector4 operator + (const IntVector4& lhs, const IntVector4& rhs)
     return result;
 }
 
+inline IntVector4 operator - (const IntVector4& lhs, const IntVector4& rhs)
+{
+    IntVector4 result;
+    for (int i = 0; i < 4; ++i)
+        result[i] = lhs[i] - rhs[i];
+    return result;
+}
+
+inline IntVector4 operator * (int lhs, const IntVector4& rhs)
+{
+    IntVector4 result;
+    for (int i = 0; i < 4; ++i)
+        result[i] = lhs * rhs[i];
+    return result;
+}
+
+inline int DotProduct(const IntVector4& lhs, const IntVector4& rhs)
+{
+    int result = 0;
+    for (int i = 0; i < 4; ++i)
+        result += lhs[i] * rhs[i];
+    return result;
+}
+
 inline IntVector4 RandomIntVector4(int range)
 {
     IntVector4 result;
