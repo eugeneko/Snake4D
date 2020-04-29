@@ -35,7 +35,7 @@ public:
         sim_.Render(scene4D, timeAccumulator_ / updatePeriod_);
     }
 
-private:
+protected:
     virtual void DoUpdate() = 0;
     virtual void DoTick() { sim_.Tick(); }
 
@@ -43,7 +43,6 @@ private:
     float updatePeriod_{ 1.0f };
     float timeAccumulator_{};
 
-protected:
     GameSimulation sim_{ 11 };
 };
 
@@ -87,6 +86,11 @@ public:
 private:
     virtual void DoUpdate() override
     {
+    }
+    virtual void DoTick() override
+    {
+        sim_.SetNextAction(sim_.GetBestAction());
+        GameSession::DoTick();
     }
 };
 

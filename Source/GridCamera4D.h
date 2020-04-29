@@ -89,6 +89,12 @@ public:
 
     IntVector4 GetCurrentDirection() const { return RoundVector4(currentRotation_ * Vector4(0, 0, 1, 0)); }
 
+    IntVector4 GetCurrentUp() const { return RoundVector4(currentRotation_ * Vector4(0, 1, 0, 0)); }
+
+    IntVector4 GetCurrentRight() const { return RoundVector4(currentRotation_ * Vector4(1, 0, 0, 0)); }
+
+    IntVector4 GetCurrentBlue() const { return RoundVector4(currentRotation_ * Vector4(0, 0, 0, 1)); }
+
 private:
     IntVector4 currentDirection_{};
 

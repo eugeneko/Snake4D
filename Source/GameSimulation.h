@@ -134,11 +134,30 @@ public:
             gameOver_ = true;
             deathAnimation_ = true;
         }
+    }
 
-        // Find path
+    UserAction GetBestAction()
+    {
         ea::vector<IntVector4> path;
         FindPath(path, camera_.GetCurrentPosition(), camera_.GetCurrentDirection(), targetPosition_);
-        path.clear();
+        const IntVector4 offset = path.front() - camera_.GetCurrentPosition();
+        const int dx = DotProduct(offset, camera_.GetCurrentRight());
+        const int dy = DotProduct(offset, camera_.GetCurrentUp());
+        const int dz = DotProduct(offset, camera_.GetCurrentDirection());
+        const int dw = DotProduct(offset, camera_.GetCurrentBlue());
+        if (dx < 0)
+            return UserAction::Left;
+        else if (dx > 0)
+            return UserAction::Right;
+        else if (dy < 0)
+            return UserAction::Down;
+        else if (dy > 0)
+            return UserAction::Up;
+        else if (dw < 0)
+            return UserAction::Red;
+        else if (dw > 0)
+            return UserAction::Blue;
+        return UserAction::None;
     }
 
 private:
@@ -360,6 +379,9 @@ private:
     {
         static const int rotationCost = 100;
 
+        if (targetPosition[2] != 8)
+            path.clear();
+
         static thread_local ea::priority_queue<PathNode> openSet;
         static thread_local ea::vector<IntVector4> cameFrom;
         static thread_local ea::vector<int> gScore;
@@ -423,6 +445,7 @@ private:
         };
 
         path.clear();
+        openSet.get_container().clear();
         gScore.clear();
         fScore.clear();
 
