@@ -348,6 +348,10 @@ private:
 void MainApplication::Setup()
 {
     engineParameters_[EP_APPLICATION_NAME] = "Snake4D";
+    engineParameters_[EP_HIGH_DPI] = false;
+    engineParameters_[EP_FULL_SCREEN]  = false;
+    engineParameters_[EP_HEADLESS] = false;
+    engineParameters_[EP_MULTI_SAMPLE] = 4;
 }
 
 void MainApplication::Start()
