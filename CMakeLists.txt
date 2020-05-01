@@ -1,5 +1,5 @@
 project (Snake4D)
-cmake_minimum_required(VERSION 3.2.3)
+cmake_minimum_required(VERSION 3.14)
 
 # Setup Urho3D
 set (URHO3D_MONOLITHIC_HEADER ON CACHE BOOL "")
@@ -12,6 +12,7 @@ set (URHO3D_NAVIGATION OFF CACHE BOOL "")
 set (URHO3D_NETWORK OFF CACHE BOOL "")
 set (URHO3D_PHYSICS OFF CACHE BOOL "")
 set (URHO3D_URHO2D OFF CACHE BOOL "")
+set (URHO3D_SAMPLES OFF CACHE BOOL "")
 
 add_subdirectory (${CMAKE_SOURCE_DIR}/3rdParty/rbfx)
 
