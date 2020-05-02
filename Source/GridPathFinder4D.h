@@ -9,6 +9,11 @@ namespace Urho3D
 
 class GridPathFinder4D
 {
+    static const unsigned PreStartElement = 0;
+    static const unsigned StartElement = 1;
+    static const unsigned NextElement = 2;
+    static const unsigned MinElements = 3;
+
 public:
     GridPathFinder4D(int gridSize, int movementCost = 1, int rotationCost = 100)
         : gridSize_(gridSize)
@@ -21,7 +26,12 @@ public:
     bool UpdatePath(const IntVector4& startPosition, const IntVector4& startDirection,
         const IntVector4& targetPosition, const T& checkCell);
 
-    IntVector4 GetNextCellOffset() const { return path_.size() >= 2 ? path_[1] - path_[0] : IntVector4{}; }
+    IntVector4 GetNextCellOffset() const
+    {
+        return path_.size() >= MinElements
+            ? path_[NextElement] - path_[StartElement]
+            : IntVector4{};
+    }
 
 private:
     struct OpenSetNode
@@ -97,7 +107,11 @@ private:
             path_.push_back(pathElement);
             pathElement = cameFrom_[FlattenIndex(pathElement)];
         }
+
+        // Add start and pre-start position for caching
         path_.push_back(startPosition);
+        path_.push_back(cameFrom_[FlattenIndex(startPosition)]);
+
         ea::reverse(path_.begin(), path_.end());
     }
 
@@ -117,6 +131,23 @@ template <class T>
 bool GridPathFinder4D::UpdatePath(const IntVector4& startPosition, const IntVector4& startDirection,
     const IntVector4& targetPosition, const T& checkCell)
 {
+    // Try to reuse previously calculated path
+    if (path_.size() >= MinElements && path_.back() == targetPosition)
+    {
+        for (unsigned i = StartElement; i < path_.size(); ++i)
+        {
+            const IntVector4 cachedPosition = path_[i];
+            const IntVector4 cachedDirection = path_[i] - path_[i - 1];
+            if (cachedPosition == startPosition && cachedDirection == startDirection)
+            {
+                // Erase outdated elements
+                path_.erase(path_.begin(), path_.begin() + i - 1);
+                return true;
+            }
+        }
+    }
+
+    // Rebuild path from scratch
     path_.clear();
     openSet_.get_container().clear();
     gScore_.clear();
