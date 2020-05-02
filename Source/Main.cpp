@@ -12,6 +12,8 @@ class GameSession : public Object
 public:
     GameSession(Context* context) : Object(context) {}
 
+    virtual bool IsTutorialHintVisible() { return false; };
+
     void SetUpdatePeriod(float period) { updatePeriod_ = period; }
 
     void SetPaused(bool paused) { paused_ = paused; }
@@ -76,6 +78,43 @@ private:
     }
 };
 
+class TutorialGameSession : public GameSession
+{
+    URHO3D_OBJECT(TutorialGameSession, GameSession);
+
+public:
+    TutorialGameSession(Context* context) : GameSession(context) {}
+
+    virtual bool IsTutorialHintVisible() { return true; };
+
+private:
+    virtual void DoUpdate() override
+    {
+        // Apply input
+        auto input = context_->GetSubsystem<Input>();
+
+        if (input->GetKeyPress(KEY_A))
+            sim_.SetNextAction(UserAction::Left);
+        if (input->GetKeyPress(KEY_D))
+            sim_.SetNextAction(UserAction::Right);
+        if (input->GetKeyPress(KEY_W))
+            sim_.SetNextAction(UserAction::Up);
+        if (input->GetKeyPress(KEY_S))
+            sim_.SetNextAction(UserAction::Down);
+        if (input->GetKeyPress(KEY_Q))
+            sim_.SetNextAction(UserAction::Red);
+        if (input->GetKeyPress(KEY_E))
+            sim_.SetNextAction(UserAction::Blue);
+        if (input->GetKeyPress(KEY_SPACE))
+            sim_.SetNextAction(UserAction::XRoll);
+    }
+    virtual void DoTick() override
+    {
+        //sim_.SetNextAction(sim_.GetBestAction());
+        GameSession::DoTick();
+    }
+};
+
 class DemoGameSession : public GameSession
 {
     URHO3D_OBJECT(DemoGameSession, GameSession);
@@ -94,9 +133,6 @@ private:
     }
 };
 
-using StartCallback = std::function<void(StringHash sessionType)>;
-using PausedCallback = std::function<void(bool paused)>;
-
 class GameUI : public Object
 {
     URHO3D_OBJECT(GameUI, Object);
@@ -104,14 +140,13 @@ class GameUI : public Object
 public:
     GameUI(Context* context) : Object(context) {}
 
-    void Initialize(bool startGame, StartCallback startCallback, PausedCallback pauseCallback)
-    {
-        startCallback_ = startCallback;
-        pauseCallback_ = pauseCallback;
+    GameSession* GetCurrentSession() const { return currentSession_; }
 
+    void Initialize(bool startGame)
+    {
         CreateUI();
         if (startGame)
-            StartGame(ClassicGameSession::GetTypeStatic());
+            StartGame(MakeShared<ClassicGameSession>(context_));
     }
 
     void TogglePaused()
@@ -119,23 +154,26 @@ public:
         if (state_ == State::Paused)
         {
             state_ = State::Running;
-            pauseCallback_(false);
+            currentSession_->SetPaused(false);
             window_->SetVisible(false);
+            tutorialHint_->SetVisible(currentSession_->IsTutorialHintVisible());
         }
         else if (state_ == State::Running)
         {
             state_ = State::Paused;
-            pauseCallback_(true);
+            currentSession_->SetPaused(true);
             window_->SetVisible(true);
+            tutorialHint_->SetVisible(false);
         }
     }
 
-    void StartGame(StringHash sessionType)
+    void StartGame(SharedPtr<GameSession> session)
     {
         state_ = State::Running;
-        startCallback_(sessionType);
-        pauseCallback_(false);
+        currentSession_ = session;
+        currentSession_->SetPaused(false);
         window_->SetVisible(false);
+        tutorialHint_->SetVisible(currentSession_->IsTutorialHintVisible());
     }
 
     static void RegisterObject(Context* context)
@@ -174,7 +212,8 @@ private:
         SubscribeToEvent(E_KEYDOWN,
             [this](StringHash eventType, VariantMap& eventData)
         {
-            if (eventData[KeyDown::P_KEY].GetInt() == KEY_ESCAPE)
+            const auto key = static_cast<Key>(eventData[KeyDown::P_KEY].GetInt());
+            if (key == KEY_ESCAPE || key == KEY_TAB)
             {
                 TogglePaused();
             }
@@ -189,15 +228,19 @@ private:
         SubscribeToEvent(newGameButton, E_PRESSED,
             [this](StringHash eventType, VariantMap& eventData)
         {
-            StartGame(ClassicGameSession::GetTypeStatic());
+            StartGame(MakeShared<ClassicGameSession>(context_));
         });
 
-        tutorialButton->SetEnabled(false);
+        SubscribeToEvent(tutorialButton, E_PRESSED,
+            [this](StringHash eventType, VariantMap& eventData)
+        {
+            StartGame(MakeShared<TutorialGameSession>(context_));
+        });
 
         SubscribeToEvent(demoButton, E_PRESSED,
             [this](StringHash eventType, VariantMap& eventData)
         {
-            StartGame(DemoGameSession::GetTypeStatic());
+            StartGame(MakeShared<DemoGameSession>(context_));
         });
 
         SubscribeToEvent(exitButton, E_PRESSED,
@@ -205,6 +248,41 @@ private:
         {
             SendEvent(E_EXITREQUESTED);
         });
+
+#ifdef __EMSCRIPTEN__
+        exitButton->SetEnabled(false);
+#endif
+
+        // Create label
+        scoreLabel_ = uiRoot->CreateChild<Text>("Score Label");
+        scoreLabel_->SetText("Score: 0");
+        scoreLabel_->SetStyleAuto();
+        scoreLabel_->SetFontSize(menuFontSize_);
+
+        // Create hint box
+        tutorialHint_ = uiRoot->CreateChild<Window>("Tutorial Hint");
+        tutorialHint_->SetStyleAuto();
+        tutorialHint_->UpdateLayout();
+
+        auto tutorialHintText = tutorialHint_->CreateChild<Text>("Tutorial Hint Text");
+        tutorialHintText->SetAlignment(HA_CENTER, VA_CENTER);
+        tutorialHintText->SetTextAlignment(HA_CENTER);
+        tutorialHintText->SetText("H\nHint");
+        tutorialHintText->SetStyleAuto();
+        tutorialHintText->SetFontSize(menuFontSize_);
+
+        IntVector2 hintSize;
+        hintSize.x_ = CeilToInt(tutorialHintText->GetMinWidth() + 2 * padding_);
+        hintSize.y_ = tutorialHintText->GetMinHeight() + padding_;
+
+        tutorialHint_->SetMinAnchor(0.5f, 0.7f);
+        tutorialHint_->SetMaxAnchor(0.5f, 0.7f);
+        tutorialHint_->SetPivot(0.0f, 0.0f);
+        tutorialHint_->SetMinOffset(-hintSize / 2);
+        tutorialHint_->SetMaxOffset(hintSize / 2);
+        tutorialHint_->SetEnableAnchor(true);
+
+        tutorialHint_->SetVisible(false);
     }
 
     Button* CreateButton(const ea::string& text, UIElement* parent) const
@@ -220,8 +298,8 @@ private:
         buttonText->SetStyleAuto();
         buttonText->SetFontSize(menuFontSize_);
 
-        button->SetFixedWidth(CeilToInt(buttonText->GetRowWidth(0) + 2 * padding_));
-        button->SetFixedHeight(buttonText->GetHeight() + padding_);
+        button->SetFixedWidth(CeilToInt(buttonText->GetMinWidth() + 2 * padding_));
+        button->SetFixedHeight(buttonText->GetMinHeight() + padding_);
 
         return button;
     }
@@ -229,11 +307,12 @@ private:
     const int padding_{ 18 };
     const float menuFontSize_{ 24 };
 
-    StartCallback startCallback_;
-    PausedCallback pauseCallback_;
+    SharedPtr<GameSession> currentSession_;
 
     State state_{};
     Window* window_{};
+    Window* tutorialHint_{};
+    Text* scoreLabel_{};
 };
 
 using RenderCallback = std::function<bool(float timeStep, Scene4D& scene4D)>;
@@ -342,7 +421,6 @@ public:
 private:
     SharedPtr<GameUI> gameUI_;
     SharedPtr<GameRenderer> gameRenderer_;
-    SharedPtr<GameSession> gameSession_;
 };
 
 void MainApplication::Setup()
@@ -363,30 +441,17 @@ void MainApplication::Start()
 
     auto renderCallback = [=](float timeStep, Scene4D& scene4D)
     {
-        if (!gameSession_)
+        GameSession* gameSession = gameUI_->GetCurrentSession();
+        if (!gameSession)
             return false;
 
-        gameSession_->Update(timeStep);
-        gameSession_->Render(scene4D);
+        gameSession->Update(timeStep);
+        gameSession->Render(scene4D);
         return true;
     };
 
-    auto startCallback = [=](StringHash sessionType)
-    {
-        if (sessionType == DemoGameSession::GetTypeStatic())
-            gameSession_ = MakeShared<DemoGameSession>(context_);
-        else
-            gameSession_ = MakeShared<ClassicGameSession>(context_);
-    };
-
-    auto pauseCallback = [=](bool paused)
-    {
-        if (gameSession_)
-            gameSession_->SetPaused(paused);
-    };
-
     gameUI_ = MakeShared<GameUI>(context_);
-    gameUI_->Initialize(true, startCallback, pauseCallback);
+    gameUI_->Initialize(true);
 
     gameRenderer_ = MakeShared<GameRenderer>(context_);
     gameRenderer_->Initialize(renderCallback);
