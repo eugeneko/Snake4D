@@ -3,6 +3,7 @@
 #include "Math4D.h"
 #include "Scene4D.h"
 #include "GridCamera4D.h"
+#include "GridPathFinder4D.h"
 
 #include <EASTL/priority_queue.h>
 
@@ -49,7 +50,13 @@ class GameSimulation
 {
 public:
     GameSimulation() = default;
-    explicit GameSimulation(int size) : size_(size) { Reset(); }
+
+    explicit GameSimulation(int size)
+        : size_(size)
+        , pathFinder_(size)
+    {
+        Reset();
+    }
 
     void Reset()
     {
@@ -138,9 +145,15 @@ public:
 
     UserAction GetBestAction()
     {
-        ea::vector<IntVector4> path;
-        FindPath(path, camera_.GetCurrentPosition(), camera_.GetCurrentDirection(), targetPosition_);
-        const IntVector4 offset = path.front() - camera_.GetCurrentPosition();
+        const IntVector4& startPosition = camera_.GetCurrentPosition();
+        const IntVector4& startDirection = camera_.GetCurrentDirection();
+        const auto checkCell = [&](const IntVector4& position) { return IsValidHeadPosition(position); };
+
+        // Find path, do nothing if fail
+        if (!pathFinder_.UpdatePath(startPosition, startDirection, targetPosition_, checkCell))
+            return UserAction::None;
+
+        const IntVector4 offset = pathFinder_.GetNextCellOffset();
         const int dx = DotProduct(offset, camera_.GetCurrentRight());
         const int dy = DotProduct(offset, camera_.GetCurrentUp());
         const int dz = DotProduct(offset, camera_.GetCurrentDirection());
@@ -370,144 +383,6 @@ private:
         return { {}, false };
     }
 
-    struct PathNode { IntVector4 position; int fScore; };
-
-    friend bool operator < (const PathNode& lhs, const PathNode& rhs) { return lhs.fScore > rhs.fScore; }
-
-    bool FindPath(ea::vector<IntVector4>& path,
-        const IntVector4& startPosition, const IntVector4& direction, const IntVector4& targetPosition)
-    {
-        static const int rotationCost = 100;
-
-        if (targetPosition[2] != 8)
-            path.clear();
-
-        static thread_local ea::priority_queue<PathNode> openSet;
-        static thread_local ea::vector<IntVector4> cameFrom;
-        static thread_local ea::vector<int> gScore;
-        static thread_local ea::vector<int> fScore;
-
-        const auto flattenIndex = [&](const IntVector4& pos)
-        {
-            return static_cast<unsigned>(((pos[3] * size_ + pos[2]) * size_ + pos[1]) * size_ + pos[0]);
-        };
-
-        const auto getFinishWeight = [&](const IntVector4& position)
-        {
-            const IntVector4 currentDirection = position - cameFrom[flattenIndex(position)];
-            const IntVector4 targetDelta = targetPosition - position;
-            const int projectionDistance = DotProduct(targetDelta, currentDirection);
-            const IntVector4 projectedTargetDelta = targetDelta - projectionDistance * currentDirection;
-
-            int weight = 0;
-            for (int i = 0; i < 4; ++i)
-                weight += projectedTargetDelta[i] != 0 ? rotationCost : 0;
-
-            if (projectionDistance < 0)
-                weight += 2 * rotationCost;
-
-            for (int i = 0; i < 4; ++i)
-                weight += Abs(targetDelta[i]);
-
-            return weight;
-        };
-
-        const auto getNeighborWeight = [&](const IntVector4& position, const IntVector4& offset)
-        {
-            const IntVector4 currentDirection = position - cameFrom[flattenIndex(position)];
-            const int projectionDistance = DotProduct(offset, currentDirection);
-
-            if (projectionDistance > 0)
-                return 1; // Idle action
-            else if (projectionDistance == 0) // Rotation
-                return rotationCost;
-            else
-                return 2 * rotationCost; // 2 rotations
-        };
-
-        const auto queueOrUpdateNode = [&](const IntVector4& position)
-        {
-            const unsigned index = flattenIndex(position);
-
-            const bool found = false;
-            for (unsigned i = 0; i < openSet.size(); ++i)
-            {
-                auto& node = openSet.get_container()[i];
-                if (node.position == position)
-                {
-                    node.fScore = fScore[index];
-                    openSet.change(i);
-                    return;
-                }
-            }
-
-            openSet.push({ position, fScore[index] });
-        };
-
-        path.clear();
-        openSet.get_container().clear();
-        gScore.clear();
-        fScore.clear();
-
-        cameFrom.resize(size_ * size_ * size_ * size_);
-        gScore.resize(size_ * size_ * size_ * size_, M_MAX_INT);
-        fScore.resize(size_ * size_ * size_ * size_, M_MAX_INT);
-
-        const unsigned startIndex = flattenIndex(startPosition);
-        cameFrom[startIndex] = startPosition - direction;
-        gScore[startIndex] = 0;
-        fScore[startIndex] = getFinishWeight(startPosition);
-
-        queueOrUpdateNode(startPosition);
-
-        // Size of the open set changes!
-        while (!openSet.empty())
-        {
-            const auto currentNode = openSet.top();
-            openSet.pop();
-
-            const IntVector4& currentPosition = currentNode.position;
-            const unsigned currentIndex = flattenIndex(currentPosition);
-
-            // Path is found, reconstruct and exit
-            if (currentPosition == targetPosition)
-            {
-                IntVector4 pathElement = currentPosition;
-                while (pathElement != startPosition)
-                {
-                    path.push_back(pathElement);
-                    pathElement = cameFrom[flattenIndex(pathElement)];
-                }
-
-                ea::reverse(path.begin(), path.end());
-                return true;
-            }
-
-            // For each neighbor
-            for (unsigned i = 0; i < 8; ++i)
-            {
-                IntVector4 offset{};
-                offset[i / 2] = !!(i % 2) ? 1 : -1;
-
-                // Skip if cannot go there
-                const IntVector4 neighborPosition = currentPosition + offset;
-                const unsigned neighborIndex = flattenIndex(neighborPosition);
-                if (!IsValidHeadPosition(neighborPosition))
-                    continue;
-
-                const int gScoreNew = gScore[currentIndex] + getNeighborWeight(currentPosition, offset);
-                if (gScoreNew < gScore[neighborIndex])
-                {
-                    cameFrom[neighborIndex] = currentPosition;
-                    gScore[neighborIndex] = gScoreNew;
-                    fScore[neighborIndex] = gScore[neighborIndex] + getFinishWeight(neighborPosition);
-                    queueOrUpdateNode(neighborPosition);
-                }
-            }
-        }
-        return false;
-    }
-
     int size_{};
     RenderSettings renderSettings_;
 
@@ -521,6 +396,7 @@ private:
     ea::vector<IntVector4> previousSnake_;
 
     IntVector4 targetPosition_{};
+    GridPathFinder4D pathFinder_;
 };
 
 }
