@@ -309,7 +309,7 @@ public:
             solidGeometry->BeginGeometry(0, TRIANGLE_LIST);
             transparentGeometry->BeginGeometry(0, TRIANGLE_LIST);
 
-            BuildScene4D(CustomGeometryBuilder{ solidGeometry, transparentGeometry }, scene4D_);
+            scene4D_.Render(CustomGeometryBuilder{ solidGeometry, transparentGeometry });
 
             solidGeometry->Commit();
             transparentGeometry->Commit();

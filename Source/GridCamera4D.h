@@ -31,55 +31,17 @@ inline IntVector4 PositionToIndex(const Vector4& position)
 class GridCamera4D
 {
 public:
-    void Reset(const IntVector4& position, const IntVector4& direction, const Matrix4& rotation)
-    {
-        currentDirection_ = direction;
+    void Reset(const IntVector4& position, const IntVector4& direction, const Matrix4& rotation);
 
-        previousPosition_ = position;
-        currentPosition_ = position;
+    void Step(const RotationDelta4D& delta, bool move);
 
-        previousRotation_ = { rotation, Vector4::ZERO };
-        currentRotation_ = { rotation, Vector4::ZERO };
-        rotationDelta_ = {};
-    }
+    Vector4 GetWorldPosition(float blendFactor) const;
 
-    void Step(const RotationDelta4D& delta, bool move)
-    {
-        rotationDelta_ = delta;
+    Matrix4x5 GetWorldRotation(float blendFactor) const;
 
-        // TODO: Round matrix to integers
-        previousRotation_ = currentRotation_;
-        currentRotation_ = currentRotation_ * rotationDelta_.AsMatrix(1.0f);
-        currentDirection_ = GetCurrentDirection();
+    Matrix4x5 GetViewMatrix(float translationBlendFactor, float rotationBlendFactor) const;
 
-        previousPosition_ = currentPosition_;
-        if (move)
-            currentPosition_ = currentPosition_ + currentDirection_;
-    }
-
-    Vector4 GetWorldPosition(float blendFactor) const
-    {
-        return Lerp(IndexToPosition(previousPosition_), IndexToPosition(currentPosition_), blendFactor);
-    }
-
-    Matrix4x5 GetWorldRotation(float blendFactor) const
-    {
-        return previousRotation_ * rotationDelta_.AsMatrix(blendFactor);
-    }
-
-    Matrix4x5 GetViewMatrix(float translationBlendFactor, float rotationBlendFactor) const
-    {
-        const Vector4 cameraPosition = GetWorldPosition(translationBlendFactor);
-        const Matrix4x5 cameraRotation = GetWorldRotation(rotationBlendFactor);
-        return cameraRotation.FastInverted() * Matrix4x5::MakeTranslation(-cameraPosition);
-    }
-
-    Matrix4x5 GetModelMatrix(float translationBlendFactor, float rotationBlendFactor) const
-    {
-        const Vector4 cameraPosition = GetWorldPosition(translationBlendFactor);
-        const Matrix4x5 cameraRotation = GetWorldRotation(rotationBlendFactor);
-        return Matrix4x5::MakeTranslation(cameraPosition) * cameraRotation;
-    }
+    Matrix4x5 GetModelMatrix(float translationBlendFactor, float rotationBlendFactor) const;
 
     Matrix4x5 GetCurrentViewMatrix() const { return GetViewMatrix(1.0f, 1.0f); }
 

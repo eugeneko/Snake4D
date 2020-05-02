@@ -1,11 +1,4 @@
-set (SOURCE_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/Main.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/GameSimulation.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/GeometryBuilder.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/GridCamera4D.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/Math4D.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/Scene4D.h
-)
+file (GLOB SOURCE_FILES *.h *.cpp)
 
 set (TARGET_NAME Snake4D)
 add_executable(${TARGET_NAME} WIN32 ${SOURCE_FILES})
