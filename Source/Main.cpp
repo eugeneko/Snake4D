@@ -5,12 +5,37 @@
 
 using namespace Urho3D;
 
+static const IntVector4 standardTargets[] = {
+    { 5, 5, 8, 5 },
+};
+
+static const IntVector4 tutorialTargets[] = {
+    { 5, 5, 8, 5 },
+    { 7, 5, 8, 5 },
+    { 9, 5, 5, 5 },
+    { 9, 5, 3, 1 },
+    { 7, 5, 3, 0 },
+    { 3, 5, 3, 3 },
+    { 3, 5, 1, 7 },
+    { 1, 5, 0, 7 },
+    { 0, 5, 2, 7 },
+    { 0, 7, 5, 7 },
+    { 0, 9, 7, 7 },
+    { 0, 5, 9, 7 },
+
+    { 0, 0, 9, 0 },
+};
+
 class GameSession : public Object
 {
     URHO3D_OBJECT(GameSession, Object);
 
 public:
-    GameSession(Context* context) : Object(context) {}
+    GameSession(Context* context)
+        : Object(context)
+    {
+        sim_.EnqueueTargets(standardTargets);
+    }
 
     virtual bool IsTutorialHintVisible() { return false; };
 
@@ -85,7 +110,11 @@ class TutorialGameSession : public ClassicGameSession
     URHO3D_OBJECT(TutorialGameSession, ClassicGameSession);
 
 public:
-    TutorialGameSession(Context* context) : ClassicGameSession(context) {}
+    TutorialGameSession(Context* context)
+        : ClassicGameSession(context)
+    {
+        sim_.EnqueueTargets(tutorialTargets);
+    }
 
     virtual bool IsTutorialHintVisible() { return true; };
 
@@ -270,12 +299,13 @@ private:
         hintSize.x_ = CeilToInt(tutorialHintText_->GetMinWidth() + 2 * padding_);
         hintSize.y_ = tutorialHintText_->GetMinHeight() + padding_;
 
-        tutorialHint_->SetMinAnchor(0.5f, 0.7f);
-        tutorialHint_->SetMaxAnchor(0.5f, 0.7f);
+        tutorialHint_->SetMinAnchor(0.5f, 0.45f);
+        tutorialHint_->SetMaxAnchor(0.5f, 0.45f);
         tutorialHint_->SetPivot(0.0f, 0.0f);
         tutorialHint_->SetMinOffset(-hintSize / 2);
         tutorialHint_->SetMaxOffset(hintSize / 2);
         tutorialHint_->SetEnableAnchor(true);
+        tutorialHint_->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
 
         tutorialHint_->SetVisible(false);
     }

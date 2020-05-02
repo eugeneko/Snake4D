@@ -5,6 +5,7 @@
 #include "GridCamera4D.h"
 #include "GridPathFinder4D.h"
 
+#include <EASTL/queue.h>
 #include <EASTL/priority_queue.h>
 
 #include <cmath>
@@ -70,6 +71,16 @@ public:
         targetPosition_ = { size_ / 2, size_ / 2, size_ * 3 / 4, size_ / 2 };
     }
 
+    void EnqueueTargets(ea::span<const IntVector4> targets)
+    {
+        targetQueue_.get_container().assign(targets.begin(), targets.end());
+        if (!targetQueue_.empty())
+        {
+            targetPosition_ = targetQueue_.front();
+            targetQueue_.pop();
+        }
+    }
+
     void Render(Scene4D& scene, float blendFactor) const
     {
         ResetScene(scene, blendFactor);
@@ -118,10 +129,11 @@ public:
         if (nextHeadPosition == targetPosition_)
         {
             // Generate new target position
-            auto newTarget = GetAvailablePosition(snake_);
+            auto newTarget = GetNextTargetPosition();
             if (!newTarget.second)
             {
                 // TODO: This is nearly impossible
+                gameOver_ = true;
                 return;
             }
 
@@ -354,6 +366,18 @@ private:
         scene.wireframeTesseracts_.push_back(Tesseract{ IndexToPosition(targetPosition_), Vector4::ONE * 0.6f, targetColor });
     }
 
+    ea::pair<IntVector4, bool> GetNextTargetPosition()
+    {
+        if (!targetQueue_.empty())
+        {
+            const IntVector4 nextTarget = targetQueue_.front();
+            targetQueue_.pop();
+            return { nextTarget, true };
+        }
+
+        return GetAvailablePosition(snake_);
+    }
+
     ea::pair<IntVector4, bool> GetAvailablePosition(const ea::vector<IntVector4>& blockedPositions) const
     {
         static const int maxRetry = 10;
@@ -395,6 +419,7 @@ private:
     ea::vector<IntVector4> snake_;
     ea::vector<IntVector4> previousSnake_;
 
+    ea::queue<IntVector4> targetQueue_;
     IntVector4 targetPosition_{};
     GridPathFinder4D pathFinder_;
 };
