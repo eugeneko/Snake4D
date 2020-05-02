@@ -47,10 +47,11 @@ private:
         return static_cast<unsigned>(((pos[3] * gridSize_ + pos[2]) * gridSize_ + pos[1]) * gridSize_ + pos[0]);
     }
 
-    int EstimateWeightToFinish(const IntVector4& position, const IntVector4& targetPosition) const
+    int EstimateWeightToFinish(const IntVector4& prevPosition, const IntVector4& currentPosition,
+        const IntVector4& targetPosition) const
     {
-        const IntVector4 currentDirection = position - cameFrom_[FlattenIndex(position)];
-        const IntVector4 targetDelta = targetPosition - position;
+        const IntVector4 currentDirection = currentPosition - prevPosition;
+        const IntVector4 targetDelta = targetPosition - currentPosition;
         const int projectionDistance = DotProduct(targetDelta, currentDirection);
         const IntVector4 projectedTargetDelta = targetDelta - projectionDistance * currentDirection;
 
@@ -67,9 +68,10 @@ private:
         return weight;
     }
 
-    int CalculateMovementWeight(const IntVector4& position, const IntVector4& offset) const
+    int CalculateMovementWeight(const IntVector4& prevPosition, const IntVector4& currentPosition,
+        const IntVector4& offset) const
     {
-        const IntVector4 currentDirection = position - cameFrom_[FlattenIndex(position)];
+        const IntVector4 currentDirection = currentPosition - prevPosition;
         const int projectionDistance = DotProduct(offset, currentDirection);
 
         if (projectionDistance > 0)
@@ -161,7 +163,7 @@ bool GridPathFinder4D::UpdatePath(const IntVector4& startPosition, const IntVect
     const unsigned startIndex = FlattenIndex(startPosition);
     cameFrom_[startIndex] = startPosition - startDirection;
     gScore_[startIndex] = 0;
-    fScore_[startIndex] = EstimateWeightToFinish(startPosition, targetPosition);
+    fScore_[startIndex] = EstimateWeightToFinish(cameFrom_[startIndex], startPosition, targetPosition);
 
     AddToOpenSet(startPosition);
 
@@ -193,10 +195,12 @@ bool GridPathFinder4D::UpdatePath(const IntVector4& startPosition, const IntVect
             if (!checkCell(neighborPosition))
                 continue;
 
-            const int gScoreNew = gScore_[currentIndex] + CalculateMovementWeight(currentPosition, offset);
+            const IntVector4 prevPosition = cameFrom_[FlattenIndex(currentPosition)];
+            const int movementWeight = CalculateMovementWeight(prevPosition, currentPosition, offset);
+            const int gScoreNew = gScore_[currentIndex] + movementWeight;
             if (gScoreNew < gScore_[neighborIndex])
             {
-                const int weightToFinish = EstimateWeightToFinish(neighborPosition, targetPosition);
+                const int weightToFinish = EstimateWeightToFinish(currentPosition, neighborPosition, targetPosition);
                 cameFrom_[neighborIndex] = currentPosition;
                 gScore_[neighborIndex] = gScoreNew;
                 fScore_[neighborIndex] = gScore_[neighborIndex] + weightToFinish;

@@ -14,6 +14,8 @@ public:
 
     virtual bool IsTutorialHintVisible() { return false; };
 
+    virtual ea::string GetTutorialHint() { return ""; }
+
     void SetUpdatePeriod(float period) { updatePeriod_ = period; }
 
     void SetPaused(bool paused) { paused_ = paused; }
@@ -78,40 +80,27 @@ private:
     }
 };
 
-class TutorialGameSession : public GameSession
+class TutorialGameSession : public ClassicGameSession
 {
-    URHO3D_OBJECT(TutorialGameSession, GameSession);
+    URHO3D_OBJECT(TutorialGameSession, ClassicGameSession);
 
 public:
-    TutorialGameSession(Context* context) : GameSession(context) {}
+    TutorialGameSession(Context* context) : ClassicGameSession(context) {}
 
     virtual bool IsTutorialHintVisible() { return true; };
 
-private:
-    virtual void DoUpdate() override
+    virtual ea::string GetTutorialHint()
     {
-        // Apply input
-        auto input = context_->GetSubsystem<Input>();
-
-        if (input->GetKeyPress(KEY_A))
-            sim_.SetNextAction(UserAction::Left);
-        if (input->GetKeyPress(KEY_D))
-            sim_.SetNextAction(UserAction::Right);
-        if (input->GetKeyPress(KEY_W))
-            sim_.SetNextAction(UserAction::Up);
-        if (input->GetKeyPress(KEY_S))
-            sim_.SetNextAction(UserAction::Down);
-        if (input->GetKeyPress(KEY_Q))
-            sim_.SetNextAction(UserAction::Red);
-        if (input->GetKeyPress(KEY_E))
-            sim_.SetNextAction(UserAction::Blue);
-        if (input->GetKeyPress(KEY_SPACE))
-            sim_.SetNextAction(UserAction::XRoll);
-    }
-    virtual void DoTick() override
-    {
-        //sim_.SetNextAction(sim_.GetBestAction());
-        GameSession::DoTick();
+        switch (sim_.GetBestAction())
+        {
+        case UserAction::Left:  return "A\nLeft";
+        case UserAction::Right: return "D\nRight";
+        case UserAction::Up:    return "W\nUp";
+        case UserAction::Down:  return "S\nDown";
+        case UserAction::Red:   return "Q\nRed";
+        case UserAction::Blue:  return "E\nBlue";
+        default:                return "_\nWait";
+        }
     }
 };
 
@@ -147,6 +136,12 @@ public:
         CreateUI();
         if (startGame)
             StartGame(MakeShared<ClassicGameSession>(context_));
+    }
+
+    void Update()
+    {
+        if (currentSession_ && currentSession_->IsTutorialHintVisible())
+            tutorialHintText_->SetText(currentSession_->GetTutorialHint());
     }
 
     void TogglePaused()
@@ -264,16 +259,16 @@ private:
         tutorialHint_->SetStyleAuto();
         tutorialHint_->UpdateLayout();
 
-        auto tutorialHintText = tutorialHint_->CreateChild<Text>("Tutorial Hint Text");
-        tutorialHintText->SetAlignment(HA_CENTER, VA_CENTER);
-        tutorialHintText->SetTextAlignment(HA_CENTER);
-        tutorialHintText->SetText("H\nHint");
-        tutorialHintText->SetStyleAuto();
-        tutorialHintText->SetFontSize(menuFontSize_);
+        tutorialHintText_ = tutorialHint_->CreateChild<Text>("Tutorial Hint Text");
+        tutorialHintText_->SetAlignment(HA_CENTER, VA_CENTER);
+        tutorialHintText_->SetTextAlignment(HA_CENTER);
+        tutorialHintText_->SetText("H\nHint");
+        tutorialHintText_->SetStyleAuto();
+        tutorialHintText_->SetFontSize(menuFontSize_);
 
         IntVector2 hintSize;
-        hintSize.x_ = CeilToInt(tutorialHintText->GetMinWidth() + 2 * padding_);
-        hintSize.y_ = tutorialHintText->GetMinHeight() + padding_;
+        hintSize.x_ = CeilToInt(tutorialHintText_->GetMinWidth() + 2 * padding_);
+        hintSize.y_ = tutorialHintText_->GetMinHeight() + padding_;
 
         tutorialHint_->SetMinAnchor(0.5f, 0.7f);
         tutorialHint_->SetMaxAnchor(0.5f, 0.7f);
@@ -312,6 +307,7 @@ private:
     State state_{};
     Window* window_{};
     Window* tutorialHint_{};
+    Text* tutorialHintText_{};
     Text* scoreLabel_{};
 };
 
@@ -442,12 +438,14 @@ void MainApplication::Start()
     auto renderCallback = [=](float timeStep, Scene4D& scene4D)
     {
         GameSession* gameSession = gameUI_->GetCurrentSession();
-        if (!gameSession)
-            return false;
+        if (gameSession)
+        {
+            gameSession->Update(timeStep);
+            gameSession->Render(scene4D);
+        }
 
-        gameSession->Update(timeStep);
-        gameSession->Render(scene4D);
-        return true;
+        gameUI_->Update();
+        return !!gameSession;
     };
 
     gameUI_ = MakeShared<GameUI>(context_);
