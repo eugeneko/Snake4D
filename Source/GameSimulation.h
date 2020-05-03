@@ -185,6 +185,8 @@ public:
         return UserAction::None;
     }
 
+    unsigned GetSnakeLength() const { return snake_.size(); }
+
 private:
     bool IsValidHeadPosition(const IntVector4& position) const
     {

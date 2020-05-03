@@ -26,6 +26,13 @@ static const IntVector4 tutorialTargets[] = {
     { 0, 0, 9, 0 },
 };
 
+static const unsigned numScoreDigits = 8;
+
+ea::string FormatScore(unsigned score)
+{
+    return Format("Score: {:{}}", score, numScoreDigits);
+}
+
 class GameSession : public Object
 {
     URHO3D_OBJECT(GameSession, Object);
@@ -40,6 +47,8 @@ public:
     virtual bool IsTutorialHintVisible() { return false; };
 
     virtual ea::string GetTutorialHint() { return ""; }
+
+    virtual ea::string GetScoreString() { return FormatScore(sim_.GetSnakeLength()); }
 
     void SetUpdatePeriod(float period) { updatePeriod_ = period; }
 
@@ -169,7 +178,16 @@ public:
 
     void Update()
     {
-        if (currentSession_ && currentSession_->IsTutorialHintVisible())
+        const bool showTutorialHint = currentSession_ && currentSession_->IsTutorialHintVisible();
+        tutorialHintWindow_->SetVisible(showTutorialHint);
+
+        const ea::string scoreString = currentSession_ ? currentSession_->GetScoreString() : "";
+        const bool showScoreLabelText = !scoreString.empty();
+        scoreLabelText_->SetVisible(showScoreLabelText);
+        if (showScoreLabelText)
+            scoreLabelText_->SetText(scoreString);
+
+        if (showTutorialHint)
             tutorialHintText_->SetText(currentSession_->GetTutorialHint());
     }
 
@@ -180,14 +198,12 @@ public:
             state_ = State::Running;
             currentSession_->SetPaused(false);
             window_->SetVisible(false);
-            tutorialHint_->SetVisible(currentSession_->IsTutorialHintVisible());
         }
         else if (state_ == State::Running)
         {
             state_ = State::Paused;
             currentSession_->SetPaused(true);
             window_->SetVisible(true);
-            tutorialHint_->SetVisible(false);
         }
     }
 
@@ -197,7 +213,7 @@ public:
         currentSession_ = session;
         currentSession_->SetPaused(false);
         window_->SetVisible(false);
-        tutorialHint_->SetVisible(currentSession_->IsTutorialHintVisible());
+        tutorialHintWindow_->SetVisible(currentSession_->IsTutorialHintVisible());
     }
 
     static void RegisterObject(Context* context)
@@ -278,36 +294,51 @@ private:
 #endif
 
         // Create label
-        scoreLabel_ = uiRoot->CreateChild<Text>("Score Label");
-        scoreLabel_->SetText("Score: 0");
-        scoreLabel_->SetStyleAuto();
-        scoreLabel_->SetFontSize(menuFontSize_);
+        {
+            auto scoreLabelWindow = uiRoot->CreateChild<Window>("Score Label Window");;
+            scoreLabelWindow->SetLayout(LM_VERTICAL, padding_, { padding_, padding_, padding_, padding_ });
+            scoreLabelWindow->SetStyleAuto();
+
+            scoreLabelText_ = scoreLabelWindow->CreateChild<Text>("Score Label");
+            scoreLabelText_->SetText(FormatScore(0));
+            scoreLabelText_->SetStyleAuto();
+            scoreLabelText_->SetFontSize(menuFontSize_);
+
+            IntVector2 hintSize;
+            hintSize.x_ = CeilToInt(scoreLabelText_->GetMinWidth());
+            hintSize.y_ = scoreLabelText_->GetMinHeight();
+
+            scoreLabelWindow->SetSize(hintSize);
+            scoreLabelWindow->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
+        }
 
         // Create hint box
-        tutorialHint_ = uiRoot->CreateChild<Window>("Tutorial Hint");
-        tutorialHint_->SetStyleAuto();
-        tutorialHint_->UpdateLayout();
+        {
+            tutorialHintWindow_ = uiRoot->CreateChild<Window>("Tutorial Hint Window");
+            tutorialHintWindow_->SetLayout(LM_VERTICAL, padding_, { padding_, padding_, padding_, padding_ });
+            tutorialHintWindow_->SetStyleAuto();
 
-        tutorialHintText_ = tutorialHint_->CreateChild<Text>("Tutorial Hint Text");
-        tutorialHintText_->SetAlignment(HA_CENTER, VA_CENTER);
-        tutorialHintText_->SetTextAlignment(HA_CENTER);
-        tutorialHintText_->SetText("H\nHint");
-        tutorialHintText_->SetStyleAuto();
-        tutorialHintText_->SetFontSize(menuFontSize_);
+            tutorialHintText_ = tutorialHintWindow_->CreateChild<Text>("Tutorial Hint Text");
+            tutorialHintText_->SetAlignment(HA_CENTER, VA_CENTER);
+            tutorialHintText_->SetTextAlignment(HA_CENTER);
+            tutorialHintText_->SetText("X\nXXXXXXX");
+            tutorialHintText_->SetStyleAuto();
+            tutorialHintText_->SetFontSize(menuFontSize_);
 
-        IntVector2 hintSize;
-        hintSize.x_ = CeilToInt(tutorialHintText_->GetMinWidth() + 2 * padding_);
-        hintSize.y_ = tutorialHintText_->GetMinHeight() + padding_;
+            IntVector2 hintSize;
+            hintSize.x_ = tutorialHintText_->GetMinWidth() + padding_ * 2;
+            hintSize.y_ = tutorialHintText_->GetMinHeight() + padding_ * 2;
 
-        tutorialHint_->SetMinAnchor(0.5f, 0.45f);
-        tutorialHint_->SetMaxAnchor(0.5f, 0.45f);
-        tutorialHint_->SetPivot(0.0f, 0.0f);
-        tutorialHint_->SetMinOffset(-hintSize / 2);
-        tutorialHint_->SetMaxOffset(hintSize / 2);
-        tutorialHint_->SetEnableAnchor(true);
-        tutorialHint_->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
+            tutorialHintWindow_->SetMinAnchor(0.5f, 0.45f);
+            tutorialHintWindow_->SetMaxAnchor(0.5f, 0.45f);
+            tutorialHintWindow_->SetPivot(0.0f, 0.0f);
+            tutorialHintWindow_->SetMinOffset(-hintSize / 2);
+            tutorialHintWindow_->SetMaxOffset(hintSize / 2);
+            tutorialHintWindow_->SetEnableAnchor(true);
+            tutorialHintWindow_->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
 
-        tutorialHint_->SetVisible(false);
+            tutorialHintWindow_->SetVisible(false);
+        }
     }
 
     Button* CreateButton(const ea::string& text, UIElement* parent) const
@@ -336,9 +367,9 @@ private:
 
     State state_{};
     Window* window_{};
-    Window* tutorialHint_{};
+    Window* tutorialHintWindow_{};
     Text* tutorialHintText_{};
-    Text* scoreLabel_{};
+    Text* scoreLabelText_{};
 };
 
 using RenderCallback = std::function<bool(float timeStep, Scene4D& scene4D)>;
