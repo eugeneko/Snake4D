@@ -27,11 +27,22 @@ enum class UserAction
     Count
 };
 
-struct RenderSettings
+enum class CurrentAnimationType
+{
+    Idle,
+    Rotation,
+    ColorRotation
+};
+
+struct AnimationSettings
 {
     float cameraTranslationSpeed_{ 1.0f };
     float cameraRotationSpeed_{ 3.0f };
     float snakeMovementSpeed_{ 6.0f };
+};
+
+struct RenderSettings
+{
     float openGuidelineSize_{ 0.2f };
     float blockedGuidelineSize_{ 0.08f };
 
@@ -71,6 +82,8 @@ public:
         targetPosition_ = { size_ / 2, size_ / 2, size_ * 3 / 4, size_ / 2 };
     }
 
+    void SetLengthIncrement(unsigned lengthIncrement) { lengthIncrement_ = lengthIncrement; }
+
     void EnqueueTargets(ea::span<const IntVector4> targets)
     {
         targetQueue_.get_container().assign(targets.begin(), targets.end());
@@ -88,6 +101,11 @@ public:
         RenderSceneBorders(scene);
         RenderGuidelines(scene);
         RenderObjects(scene, blendFactor);
+    }
+
+    void SetAnimationSettings(const AnimationSettings& animationSettings)
+    {
+        animationSettings_ = animationSettings;
     }
 
     void SetNextAction(UserAction action)
@@ -139,13 +157,15 @@ public:
 
             targetPosition_ = newTarget.first;
 
-            // Snake grows, keep tail segment
+            // Request growth
+            pendingGrowth_ += lengthIncrement_;
         }
-        else
-        {
-            // Remove tail segment because length didn't change
+
+        // Remove tail segment if doesn't grow
+        if (pendingGrowth_ == 0)
             snake_.pop_back();
-        }
+        else
+            --pendingGrowth_;
 
         // Check for collision
         if (!IsValidHeadPosition(snake_.front()))
@@ -154,6 +174,8 @@ public:
             deathAnimation_ = true;
         }
     }
+
+    UserAction GetNextAction() const { return nextAction_; }
 
     UserAction GetBestAction()
     {
@@ -185,6 +207,18 @@ public:
         return UserAction::None;
     }
 
+    CurrentAnimationType GetCurrentAnimationType(float blendFactor) const
+    {
+        if (blendFactor * animationSettings_.cameraRotationSpeed_ >= 1.0f)
+            return CurrentAnimationType::Idle;
+        else if (camera_.IsColorRotating())
+            return CurrentAnimationType::ColorRotation;
+        else if (camera_.IsRotating())
+            return CurrentAnimationType::Rotation;
+        else
+            return CurrentAnimationType::Idle;
+    }
+
     unsigned GetSnakeLength() const { return snake_.size(); }
 
 private:
@@ -206,8 +240,8 @@ private:
     void ResetScene(Scene4D& scene, float blendFactor) const
     {
         // Update camera
-        const float cameraTranslationFactor = Clamp(blendFactor * renderSettings_.cameraTranslationSpeed_, 0.0f, 1.0f);
-        const float cameraRotationFactor = Clamp(blendFactor * renderSettings_.cameraRotationSpeed_, 0.0f, 1.0f);
+        const float cameraTranslationFactor = Clamp(blendFactor * animationSettings_.cameraTranslationSpeed_, 0.0f, 1.0f);
+        const float cameraRotationFactor = Clamp(blendFactor * animationSettings_.cameraRotationSpeed_, 0.0f, 1.0f);
         const Matrix4x5 camera = camera_.GetViewMatrix(cameraTranslationFactor, cameraRotationFactor);
 
         // Reset scene
@@ -226,7 +260,7 @@ private:
     {
         const ColorTriplet snakeColor{ renderSettings_.snakeBaseColor_,
             renderSettings_.snakeRedColor_, renderSettings_.snakeBlueColor_ };
-        const float snakeMovementFactor = Clamp(blendFactor * renderSettings_.snakeMovementSpeed_, 0.0f, 1.0f);
+        const float snakeMovementFactor = Clamp(blendFactor * animationSettings_.snakeMovementSpeed_, 0.0f, 1.0f);
 
         const unsigned oldLength = previousSnake_.size();
         const unsigned newLength = snake_.size();
@@ -410,6 +444,7 @@ private:
     }
 
     int size_{};
+    AnimationSettings animationSettings_;
     RenderSettings renderSettings_;
 
     GridCamera4D camera_;
@@ -418,6 +453,8 @@ private:
     bool gameOver_{};
     bool deathAnimation_{};
 
+    unsigned lengthIncrement_{ 3 };
+    unsigned pendingGrowth_{};
     ea::vector<IntVector4> snake_;
     ea::vector<IntVector4> previousSnake_;
 

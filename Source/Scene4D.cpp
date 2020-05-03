@@ -39,7 +39,7 @@ void Scene4D::Render(CustomGeometryBuilder builder) const
             const Vector4 vertexPosition = tesseractVertices[i] * tesseract.size_ + tesseract.position_;
             vertices[i] = ConvertWorldToProj(vertexPosition, tesseract.color_);
         }
-        BuildWireframeTesseract(builder, vertices, { 0.03f, 0.02f } );
+        BuildWireframeTesseract(builder, vertices, { 0.025f, 0.025f } );
     }
 
     // Helper to draw quads

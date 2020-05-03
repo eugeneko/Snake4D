@@ -57,6 +57,10 @@ public:
 
     IntVector4 GetCurrentBlue() const { return RoundVector4(currentRotation_ * Vector4(0, 0, 0, 1)); }
 
+    bool IsRotating() const { return rotationDelta_.angle_ > M_EPSILON; }
+
+    bool IsColorRotating() const { return rotationDelta_.axis1_ == 3 || rotationDelta_.axis2_ == 3; }
+
 private:
     IntVector4 currentDirection_{};
 

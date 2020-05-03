@@ -28,6 +28,80 @@ static const IntVector4 tutorialTargets[] = {
 
 static const unsigned numScoreDigits = 8;
 
+static const Color tutorialHintSpaceHighlightColor{ 0.0f, 1.0f, 0.0f, 1.0f };
+static const Color tutorialHintRedHighlightColor{ 1.0f, 0.3f, 0.3f, 1.0f };
+static const Color tutorialHintBlueHighlightColor{ 0.6f, 0.6f, 1.0f, 1.0f };
+static const Color tutorialHintRollHighlightColor{ 1.0f, 1.0f, 0.0f, 1.0f };
+
+using ScoreToPeriodMapping = ea::vector<ea::pair<unsigned, float>>;
+
+float CalculatePeriod(const ScoreToPeriodMapping& mapping, unsigned score)
+{
+    for (unsigned i = 0; i < mapping.size(); ++i)
+    {
+        if (mapping[i].first >= score)
+        {
+            if (i == 0)
+                return mapping[i].second;
+            else
+            {
+                const auto fromScore = static_cast<float>(mapping[i - 1].first);
+                const auto toScore = static_cast<float>(mapping[i].first);
+                const float fromPeriod = mapping[i - 1].second;
+                const float toPeriod = mapping[i].second;
+                const float factor = InverseLerp(fromScore, toScore, static_cast<float>(score));
+                return Lerp(fromPeriod, toPeriod, factor);
+            }
+        }
+    }
+    return mapping.back().second;
+}
+
+struct GameSettings
+{
+    ScoreToPeriodMapping scoreToPeriod_{
+        { 3,   1.0f },
+        { 50,  0.4f },
+        { 100, 0.3f },
+    };
+    float rotationSlowdown_{ 1.2f };
+    float minRotationPeriod_{ 0.7f };
+    float colorRotationSlowdown_{ 1.5f };
+    float minColorRotationPeriod_{ 1.0f };
+
+    float tutorialHintSlowdown_{ 10.0f };
+    float tutorialHintFadeAnimationPercent_{ 0.2f };
+
+    float snakeMovementSpeedBasePeriod_{ 1.0f };
+    float snakeMovementSpeed_{ 6.0f };
+    float minSnakeMovementSpeed_{ 3.0f };
+
+    AnimationSettings animationSettings_{ 1.0f, 3.0f, 6.0f };
+
+    float CalculateCurrentPeriod(unsigned score, CurrentAnimationType animationType) const
+    {
+        const float period = CalculatePeriod(scoreToPeriod_, score);
+
+        switch (animationType)
+        {
+        case CurrentAnimationType::Rotation:
+            return ea::max(period * rotationSlowdown_, minRotationPeriod_);
+        case CurrentAnimationType::ColorRotation:
+            return ea::max(period * colorRotationSlowdown_, minColorRotationPeriod_);
+        case CurrentAnimationType::Idle:
+        default:
+            return period;
+        };
+    }
+
+    float CalculateSnakeMovementSpeed(unsigned score) const
+    {
+        const float period = CalculatePeriod(scoreToPeriod_, score);
+        const float downscale = period / snakeMovementSpeedBasePeriod_; // < 1
+        return ea::max(minSnakeMovementSpeed_, snakeMovementSpeed_ * downscale);
+    }
+};
+
 ea::string FormatScore(const ea::string& intro, unsigned score)
 {
     return Format("{}: {:{}}", intro, score, numScoreDigits);
@@ -48,9 +122,17 @@ public:
 
     virtual bool IsTutorialHintVisible() { return false; };
 
+    virtual Color GetTutorialHintColor() { return Color::WHITE; }
+
     virtual ea::string GetTutorialHint() { return ""; }
 
-    virtual ea::string GetScoreString() { return FormatScore("Score", sim_.GetSnakeLength()); }
+    virtual ea::string GetScoreString() { return FormatScore("Score", GetScore()); }
+
+    virtual float GetArtificialSlowdown() { return 1.0f; };
+
+    unsigned GetScore() const { return sim_.GetSnakeLength(); }
+
+    float GetLogicInterpolationFactor() const { return logicTimeAccumulator_ / updatePeriod_; }
 
     void SetUpdatePeriod(float period) { updatePeriod_ = period; }
 
@@ -60,19 +142,27 @@ public:
     {
         DoUpdate();
 
-        if (!paused_)
-            timeAccumulator_ += timeStep;
+        const auto animationType = sim_.GetCurrentAnimationType(GetLogicInterpolationFactor());
+        const float currentPeriod = settings_.CalculateCurrentPeriod(GetScore(), animationType);
+        const float logicUpdatePeriod = currentPeriod * GetArtificialSlowdown();
+        const float logicTimeStep = timeStep / logicUpdatePeriod;
 
-        while (timeAccumulator_ >= updatePeriod_)
+        if (!paused_)
+            logicTimeAccumulator_ += logicTimeStep;
+
+        while (logicTimeAccumulator_ >= updatePeriod_)
         {
-            timeAccumulator_ -= updatePeriod_;
+            logicTimeAccumulator_ -= updatePeriod_;
             DoTick();
+
+            settings_.animationSettings_.snakeMovementSpeed_ = settings_.CalculateSnakeMovementSpeed(GetScore());
+            sim_.SetAnimationSettings(settings_.animationSettings_);
         }
     }
 
     void Render(Scene4D& scene4D)
     {
-        sim_.Render(scene4D, timeAccumulator_ / updatePeriod_);
+        sim_.Render(scene4D, GetLogicInterpolationFactor());
     }
 
 protected:
@@ -81,8 +171,9 @@ protected:
 
     bool paused_{};
     float updatePeriod_{ 1.0f };
-    float timeAccumulator_{};
+    float logicTimeAccumulator_{};
 
+    GameSettings settings_{};
     GameSimulation sim_{ 11 };
 };
 
@@ -93,7 +184,7 @@ class ClassicGameSession : public GameSession
 public:
     ClassicGameSession(Context* context) : GameSession(context) {}
 
-private:
+protected:
     void DoUpdate() override
     {
         // Apply input
@@ -142,6 +233,57 @@ public:
         default:                return "_\nWait";
         }
     }
+
+    Color GetTutorialHintColor() override
+    {
+        const UserAction bestAction = sim_.GetBestAction();
+        if (bestAction == UserAction::None)
+            return Color::WHITE;
+
+        const float factor = 1.0f - ea::min(logicTimeAccumulator_ / settings_.tutorialHintFadeAnimationPercent_, 1.0f);
+        const float fade = factor * factor;
+        switch (bestAction)
+        {
+        case UserAction::Red:
+            return Lerp(Color::WHITE, tutorialHintRedHighlightColor, fade);
+        case UserAction::Blue:
+            return Lerp(Color::WHITE, tutorialHintBlueHighlightColor, fade);
+        case UserAction::XRoll:
+            return Lerp(Color::WHITE, tutorialHintRollHighlightColor, fade);
+        case UserAction::Left:
+        case UserAction::Right:
+        case UserAction::Up:
+        case UserAction::Down:
+        default:
+            return Lerp(Color::WHITE, tutorialHintSpaceHighlightColor, fade);
+        }
+    }
+
+    float GetArtificialSlowdown()
+    {
+        if (sim_.GetNextAction() != sim_.GetBestAction())
+            return settings_.tutorialHintSlowdown_; // User doesn't follow tutorial, do slow-mo
+        else if (sim_.GetNextAction() == UserAction::None)
+            return 1.0f; // Idle moving
+        else
+            return 1.0f / 3.0f; // User pressed correct button, speed up
+    };
+
+protected:
+    void DoUpdate() override
+    {
+        if (sim_.GetBestAction() != sim_.GetNextAction())
+            ClassicGameSession::DoUpdate();
+    }
+
+    void DoTick() override
+    {
+        GameSession::DoTick();
+        if (sim_.GetBestAction() != UserAction::None)
+            sim_.SetAnimationSettings(AnimationSettings{ 1.0f, 1.0f, 1.0f });
+        else
+            sim_.SetAnimationSettings(settings_.animationSettings_);
+    }
 };
 
 class DemoGameSession : public GameSession
@@ -149,11 +291,19 @@ class DemoGameSession : public GameSession
     URHO3D_OBJECT(DemoGameSession, GameSession);
 
 public:
-    DemoGameSession(Context* context) : GameSession(context) {}
+    DemoGameSession(Context* context)
+        : GameSession(context)
+    {
+        settings_.scoreToPeriod_ = { { 0, 0.3f } };
+        settings_.animationSettings_.snakeMovementSpeed_ = 3.0f;
+        settings_.animationSettings_.cameraTranslationSpeed_ = 1.0f;
+        settings_.animationSettings_.cameraRotationSpeed_ = 1.5f;
+        sim_.SetAnimationSettings(settings_.animationSettings_);
+    }
 
-    ea::string GetScoreString() override { return FormatScore("AI Score", sim_.GetSnakeLength()); }
+    ea::string GetScoreString() override { return FormatScore("AI Score", GetScore()); }
 
-private:
+protected:
     void DoUpdate() override
     {
     }
@@ -173,7 +323,7 @@ public:
 
     bool IsResumable() override { return false; }
 
-    ea::string GetScoreString() override { return paused_ ? "" : "Press Tab to continue"; }
+    ea::string GetScoreString() override { return paused_ ? "" : "Press Tab to play"; }
 };
 
 class GameUI : public Object
@@ -209,7 +359,11 @@ public:
         }
 
         if (showTutorialHint)
+        {
+            const Color color = currentSession_->GetTutorialHintColor();
             tutorialHintText_->SetText(currentSession_->GetTutorialHint());
+            tutorialHintText_->SetColor(color);
+        }
     }
 
     void TogglePaused()
