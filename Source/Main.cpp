@@ -83,7 +83,7 @@ public:
     ClassicGameSession(Context* context) : GameSession(context) {}
 
 private:
-    virtual void DoUpdate() override
+    void DoUpdate() override
     {
         // Apply input
         auto input = context_->GetSubsystem<Input>();
@@ -116,9 +116,9 @@ public:
         sim_.EnqueueTargets(tutorialTargets);
     }
 
-    virtual bool IsTutorialHintVisible() { return true; };
+    bool IsTutorialHintVisible() override { return true; };
 
-    virtual ea::string GetTutorialHint()
+    ea::string GetTutorialHint() override
     {
         switch (sim_.GetBestAction())
         {
@@ -141,10 +141,10 @@ public:
     DemoGameSession(Context* context) : GameSession(context) {}
 
 private:
-    virtual void DoUpdate() override
+    void DoUpdate() override
     {
     }
-    virtual void DoTick() override
+    void DoTick() override
     {
         sim_.SetNextAction(sim_.GetBestAction());
         GameSession::DoTick();
@@ -243,31 +243,31 @@ private:
             }
         });
 
-        SubscribeToEvent(resumeButton, E_PRESSED,
+        SubscribeToEvent(resumeButton, E_RELEASED,
             [this](StringHash eventType, VariantMap& eventData)
         {
             TogglePaused();
         });
 
-        SubscribeToEvent(newGameButton, E_PRESSED,
+        SubscribeToEvent(newGameButton, E_RELEASED,
             [this](StringHash eventType, VariantMap& eventData)
         {
             StartGame(MakeShared<ClassicGameSession>(context_));
         });
 
-        SubscribeToEvent(tutorialButton, E_PRESSED,
+        SubscribeToEvent(tutorialButton, E_RELEASED,
             [this](StringHash eventType, VariantMap& eventData)
         {
             StartGame(MakeShared<TutorialGameSession>(context_));
         });
 
-        SubscribeToEvent(demoButton, E_PRESSED,
+        SubscribeToEvent(demoButton, E_RELEASED,
             [this](StringHash eventType, VariantMap& eventData)
         {
             StartGame(MakeShared<DemoGameSession>(context_));
         });
 
-        SubscribeToEvent(exitButton, E_PRESSED,
+        SubscribeToEvent(exitButton, E_RELEASED,
             [this](StringHash eventType, VariantMap& eventData)
         {
             SendEvent(E_EXITREQUESTED);
@@ -456,6 +456,7 @@ void MainApplication::Setup()
     engineParameters_[EP_FULL_SCREEN]  = false;
     engineParameters_[EP_HEADLESS] = false;
     engineParameters_[EP_MULTI_SAMPLE] = 4;
+    engineParameters_[EP_WINDOW_ICON] = "Textures/UrhoIcon.png";
 }
 
 void MainApplication::Start()

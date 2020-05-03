@@ -7,8 +7,8 @@ set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 17)
 
 # Configure deploy
 if (WEB OR MOBILE)
-    create_pak("${CMAKE_SOURCE_DIR}/3rdParty/rbfx/bin/Data"     "${CMAKE_CURRENT_BINARY_DIR}/Data.pak")
-    create_pak("${CMAKE_SOURCE_DIR}/3rdParty/rbfx/bin/CoreData" "${CMAKE_CURRENT_BINARY_DIR}/CoreData.pak")
+    create_pak("${CMAKE_SOURCE_DIR}/bin/Data"     "${CMAKE_CURRENT_BINARY_DIR}/Data.pak")
+    create_pak("${CMAKE_SOURCE_DIR}/bin/CoreData" "${CMAKE_CURRENT_BINARY_DIR}/CoreData.pak")
 endif ()
 
 if (WEB)
