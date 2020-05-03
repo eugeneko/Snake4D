@@ -84,6 +84,8 @@ public:
 
     void SetLengthIncrement(unsigned lengthIncrement) { lengthIncrement_ = lengthIncrement; }
 
+    void SetEnableRolls(bool enableRolls) { enableRolls_ = enableRolls; }
+
     void EnqueueTargets(ea::span<const IntVector4> targets)
     {
         targetQueue_.get_container().assign(targets.begin(), targets.end());
@@ -188,22 +190,28 @@ public:
             return UserAction::None;
 
         const IntVector4 offset = pathFinder_.GetNextCellOffset();
-        const int dx = DotProduct(offset, camera_.GetCurrentRight());
-        const int dy = DotProduct(offset, camera_.GetCurrentUp());
-        const int dz = DotProduct(offset, camera_.GetCurrentDirection());
-        const int dw = DotProduct(offset, camera_.GetCurrentBlue());
-        if (dx < 0)
+        const int rotateLeftRight = DotProduct(offset, camera_.GetCurrentRight());
+        const int rotateUpDown = DotProduct(offset, camera_.GetCurrentUp());
+        const int rotateRedBlue = DotProduct(offset, camera_.GetCurrentBlue());
+        if (rotateLeftRight < 0)
             return UserAction::Left;
-        else if (dx > 0)
+        else if (rotateLeftRight > 0)
             return UserAction::Right;
-        else if (dy < 0)
+        else if (rotateUpDown < 0)
             return UserAction::Down;
-        else if (dy > 0)
+        else if (rotateUpDown > 0)
             return UserAction::Up;
-        else if (dw < 0)
+        else if (rotateRedBlue < 0)
             return UserAction::Red;
-        else if (dw > 0)
+        else if (rotateRedBlue > 0)
             return UserAction::Blue;
+
+        // Check for roll
+        const int offsetX = DotProduct(targetPosition_ - startPosition, camera_.GetCurrentRight());
+        const int offsetW = DotProduct(targetPosition_ - startPosition, camera_.GetCurrentBlue());
+        if (enableRolls_ && offsetX == 0 && offsetW != 0)
+            return UserAction::XRoll;
+
         return UserAction::None;
     }
 
@@ -454,6 +462,7 @@ private:
     bool deathAnimation_{};
 
     unsigned lengthIncrement_{ 3 };
+    bool enableRolls_{ true };
     unsigned pendingGrowth_{};
     ea::vector<IntVector4> snake_;
     ea::vector<IntVector4> previousSnake_;

@@ -230,6 +230,7 @@ public:
         case UserAction::Down:  return "S\nDown";
         case UserAction::Red:   return "Q\nRed";
         case UserAction::Blue:  return "E\nBlue";
+        case UserAction::XRoll: return "Space\nRoll";
         default:                return "_\nWait";
         }
     }
@@ -266,7 +267,7 @@ public:
         else if (sim_.GetNextAction() == UserAction::None)
             return 1.0f; // Idle moving
         else
-            return 1.0f / 3.0f; // User pressed correct button, speed up
+            return 0.7f; // User pressed correct button, speed up a bit
     };
 
 protected:
@@ -278,12 +279,22 @@ protected:
 
     void DoTick() override
     {
+        if (sim_.GetNextAction() == UserAction::Red)
+            redRotationUsed_ = true;
+        if (sim_.GetNextAction() == UserAction::Blue)
+            blueRotationUsed_ = true;
+
+        sim_.SetEnableRolls(redRotationUsed_ && blueRotationUsed_);
+
         GameSession::DoTick();
         if (sim_.GetBestAction() != UserAction::None)
             sim_.SetAnimationSettings(AnimationSettings{ 1.0f, 1.0f, 1.0f });
         else
             sim_.SetAnimationSettings(settings_.animationSettings_);
     }
+
+    bool redRotationUsed_{};
+    bool blueRotationUsed_{};
 };
 
 class DemoGameSession : public GameSession
