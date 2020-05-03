@@ -9,6 +9,7 @@
         <attribute name="Pressed Image Offset" value="16 0" />
         <attribute name="Hover Image Offset" value="0 16" />
         <attribute name="Pressed Child Offset" value="-1 1" />
+        <attribute name="Disabled Image Offset" value="0 32" />
     </element>
     <element type="ToggledButton" style="Button" auto="false">
         <attribute name="Image Rect" value="160 64 176 80" />

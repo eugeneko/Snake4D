@@ -28,9 +28,9 @@ static const IntVector4 tutorialTargets[] = {
 
 static const unsigned numScoreDigits = 8;
 
-ea::string FormatScore(unsigned score)
+ea::string FormatScore(const ea::string& intro, unsigned score)
 {
-    return Format("Score: {:{}}", score, numScoreDigits);
+    return Format("{}: {:{}}", intro, score, numScoreDigits);
 }
 
 class GameSession : public Object
@@ -44,11 +44,13 @@ public:
         sim_.EnqueueTargets(standardTargets);
     }
 
+    virtual bool IsResumable() { return true; }
+
     virtual bool IsTutorialHintVisible() { return false; };
 
     virtual ea::string GetTutorialHint() { return ""; }
 
-    virtual ea::string GetScoreString() { return FormatScore(sim_.GetSnakeLength()); }
+    virtual ea::string GetScoreString() { return FormatScore("Score", sim_.GetSnakeLength()); }
 
     void SetUpdatePeriod(float period) { updatePeriod_ = period; }
 
@@ -149,6 +151,8 @@ class DemoGameSession : public GameSession
 public:
     DemoGameSession(Context* context) : GameSession(context) {}
 
+    ea::string GetScoreString() override { return FormatScore("AI Score", sim_.GetSnakeLength()); }
+
 private:
     void DoUpdate() override
     {
@@ -160,6 +164,18 @@ private:
     }
 };
 
+class FirstDemoGameSession : public DemoGameSession
+{
+    URHO3D_OBJECT(FirstDemoGameSession, DemoGameSession);
+
+public:
+    FirstDemoGameSession(Context* context) : DemoGameSession(context) {}
+
+    bool IsResumable() override { return false; }
+
+    ea::string GetScoreString() override { return paused_ ? "" : "Press Tab to continue"; }
+};
+
 class GameUI : public Object
 {
     URHO3D_OBJECT(GameUI, Object);
@@ -169,23 +185,28 @@ public:
 
     GameSession* GetCurrentSession() const { return currentSession_; }
 
-    void Initialize(bool startGame)
+    void Initialize(SharedPtr<GameSession> session)
     {
         CreateUI();
-        if (startGame)
-            StartGame(MakeShared<ClassicGameSession>(context_));
+        if (session)
+            StartGame(session);
     }
 
     void Update()
     {
+        resumeButton_->SetEnabled(currentSession_ && currentSession_->IsResumable());
+
         const bool showTutorialHint = currentSession_ && currentSession_->IsTutorialHintVisible();
         tutorialHintWindow_->SetVisible(showTutorialHint);
 
         const ea::string scoreString = currentSession_ ? currentSession_->GetScoreString() : "";
-        const bool showScoreLabelText = !scoreString.empty();
-        scoreLabelText_->SetVisible(showScoreLabelText);
-        if (showScoreLabelText)
+        const bool showScoreLabel = !scoreString.empty();
+        scoreLabelWindow_->SetVisible(showScoreLabel);
+        if (showScoreLabel)
+        {
             scoreLabelText_->SetText(scoreString);
+            scoreLabelWindow_->SetWidth(scoreLabelText_->GetMinWidth() + 2 * padding_);
+        }
 
         if (showTutorialHint)
             tutorialHintText_->SetText(currentSession_->GetTutorialHint());
@@ -193,7 +214,7 @@ public:
 
     void TogglePaused()
     {
-        if (state_ == State::Paused)
+        if (state_ == State::Paused && currentSession_ && currentSession_->IsResumable())
         {
             state_ = State::Running;
             currentSession_->SetPaused(false);
@@ -222,7 +243,7 @@ public:
     }
 
 private:
-    enum class State { Menu, Paused, Running };
+    enum class State { Paused, Running };
     void CreateUI()
     {
         auto ui = context_->GetSubsystem<UI>();
@@ -242,8 +263,8 @@ private:
         window_->SetStyleAuto();
 
         // Create buttons
-        Button* resumeButton = CreateButton("Resume", window_);
-        Button* newGameButton = CreateButton("New Game", window_);
+        resumeButton_ = CreateButton("Resume", window_);
+        Button* newGameButton = CreateButton("New Game!", window_);
         Button* tutorialButton = CreateButton("Tutorial", window_);
         Button* demoButton = CreateButton("Demo", window_);
         Button* exitButton = CreateButton("Exit", window_);
@@ -259,7 +280,7 @@ private:
             }
         });
 
-        SubscribeToEvent(resumeButton, E_RELEASED,
+        SubscribeToEvent(resumeButton_, E_RELEASED,
             [this](StringHash eventType, VariantMap& eventData)
         {
             TogglePaused();
@@ -295,21 +316,14 @@ private:
 
         // Create label
         {
-            auto scoreLabelWindow = uiRoot->CreateChild<Window>("Score Label Window");;
-            scoreLabelWindow->SetLayout(LM_VERTICAL, padding_, { padding_, padding_, padding_, padding_ });
-            scoreLabelWindow->SetStyleAuto();
+            scoreLabelWindow_ = uiRoot->CreateChild<Window>("Score Label Window");;
+            scoreLabelWindow_->SetLayout(LM_VERTICAL, padding_, { padding_, padding_, padding_, padding_ });
+            scoreLabelWindow_->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
+            scoreLabelWindow_->SetStyleAuto();
 
-            scoreLabelText_ = scoreLabelWindow->CreateChild<Text>("Score Label");
-            scoreLabelText_->SetText(FormatScore(0));
+            scoreLabelText_ = scoreLabelWindow_->CreateChild<Text>("Score Label");
             scoreLabelText_->SetStyleAuto();
             scoreLabelText_->SetFontSize(menuFontSize_);
-
-            IntVector2 hintSize;
-            hintSize.x_ = CeilToInt(scoreLabelText_->GetMinWidth());
-            hintSize.y_ = scoreLabelText_->GetMinHeight();
-
-            scoreLabelWindow->SetSize(hintSize);
-            scoreLabelWindow->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
         }
 
         // Create hint box
@@ -367,8 +381,13 @@ private:
 
     State state_{};
     Window* window_{};
+
+    Button* resumeButton_{};
+
     Window* tutorialHintWindow_{};
     Text* tutorialHintText_{};
+
+    Window* scoreLabelWindow_{};
     Text* scoreLabelText_{};
 };
 
@@ -511,7 +530,7 @@ void MainApplication::Start()
     };
 
     gameUI_ = MakeShared<GameUI>(context_);
-    gameUI_->Initialize(true);
+    gameUI_->Initialize(MakeShared<FirstDemoGameSession>(context_));
 
     gameRenderer_ = MakeShared<GameRenderer>(context_);
     gameRenderer_->Initialize(renderCallback);
