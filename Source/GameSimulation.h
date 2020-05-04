@@ -80,9 +80,11 @@ struct RenderSettings
     float borderUpwardThreshold_{ 0.4f };
     float borderDistanceFade_{ 3.0f };
 
-    ColorTriplet guidelineColor_{ { 1.0f, 1.0f, 1.0f, 0.3f } };
-    float openGuidelineSize_{ 0.2f };
-    float blockedGuidelineSize_{ 0.08f };
+    ColorTriplet guidelineColor_{ { 0.3f, 1.0f, 0.3f, 0.6f } };
+    ColorTriplet redGuidelineColor_{ { 1.0f, 0.3f, 0.3f, 0.6f } };
+    ColorTriplet blueGuidelineColor_{ { 0.5f, 0.5f, 1.0f, 0.6f } };
+    float openGuidelineSize_{ 0.14f };
+    float blockedGuidelineSize_{ 0.04f };
 };
 
 inline bool operator < (const Vector3& lhs, const Vector3& rhs)
@@ -432,6 +434,14 @@ private:
         const Vector4 xAxis = viewToWorldSpaceTransform.rotation_ * Vector4(1.0f, 0.0f, 0.0f, 0.0f);
         const Vector4 yAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 1.0f, 0.0f, 0.0f);
         const Vector4 zAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 0.0f, 1.0f, 0.0f);
+        const Vector4 wAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 0.0f, 0.0f, 1.0f);
+
+        const float wDelta = wAxis.DotProduct(IndexToPosition(targetPosition_) - IndexToPosition(snake_.front()));
+        const ColorTriplet guidelineColor = wDelta < -M_LARGE_EPSILON
+            ? renderSettings_.redGuidelineColor_
+            : wDelta > M_LARGE_EPSILON
+            ? renderSettings_.blueGuidelineColor_
+            : renderSettings_.guidelineColor_;
 
         // Helper to create guideline element
         const auto createElement = [&](float x, float y, float z)
@@ -446,7 +456,7 @@ private:
             cube.deltaX_ = size * xAxis;
             cube.deltaY_ = size * yAxis;
             cube.deltaZ_ = size * zAxis;
-            cube.color_ = renderSettings_.guidelineColor_;
+            cube.color_ = guidelineColor;
             scene.solidCubes_.push_back(cube);
         };
 
@@ -494,6 +504,14 @@ private:
         const Vector4 xAxis = viewToWorldSpaceTransform.rotation_ * Vector4(1.0f, 0.0f, 0.0f, 0.0f);
         const Vector4 yAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 1.0f, 0.0f, 0.0f);
         const Vector4 zAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 0.0f, 1.0f, 0.0f);
+        const Vector4 wAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 0.0f, 0.0f, 1.0f);
+
+        const float wDelta = wAxis.DotProduct(IndexToPosition(targetPosition_) - IndexToPosition(snake_.front()));
+        const ColorTriplet guidelineColor = wDelta < -M_LARGE_EPSILON
+            ? renderSettings_.redGuidelineColor_
+            : wDelta > M_LARGE_EPSILON
+            ? renderSettings_.blueGuidelineColor_
+            : renderSettings_.guidelineColor_;
 
         // Helper to create guideline element
         const auto createElement = [&](const Vector3& viewSpacePosition)
@@ -507,7 +525,7 @@ private:
             cube.deltaX_ = size * xAxis;
             cube.deltaY_ = size * yAxis;
             cube.deltaZ_ = size * zAxis;
-            cube.color_ = renderSettings_.guidelineColor_;
+            cube.color_ = guidelineColor;
             scene.solidCubes_.push_back(cube);
         };
 

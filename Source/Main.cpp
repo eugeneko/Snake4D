@@ -311,6 +311,7 @@ public:
         settings_.animationSettings_.cameraTranslationSpeed_ = 1.0f;
         settings_.animationSettings_.cameraRotationSpeed_ = 1.5f;
         sim_.SetAnimationSettings(settings_.animationSettings_);
+        sim_.SetExactGuidelines(true);
     }
 
     ea::string GetScoreString() override { return FormatScore("AI Score", GetScore()); }
