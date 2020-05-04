@@ -440,6 +440,13 @@ private:
         Button* exitButton = CreateButton("Exit", window_);
 
         // Create events
+        SubscribeToEvent(E_SCREENMODE,
+            [ui](StringHash eventType, VariantMap& eventData)
+        {
+            // Avoid fractional UI rescale
+            ui->SetScale(ea::max(1.0f, Round(ui->GetScale())));
+        });
+
         SubscribeToEvent(E_KEYDOWN,
             [this](StringHash eventType, VariantMap& eventData)
         {
