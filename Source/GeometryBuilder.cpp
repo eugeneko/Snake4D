@@ -36,7 +36,7 @@ void BuildSolidQuad(CustomGeometryBuilder builder, ea::span<const SimpleVertex, 
 }
 
 void BuildWireframeQuad(CustomGeometryBuilder builder,
-    ea::span<const SimpleVertex, 4> frame, float thickness)
+    ea::span<const SimpleVertex, 4> frame, ea::span<const Color, 4> secondaryColors, float thickness)
 {
     // Vertex order:
     // 3 2
@@ -56,7 +56,7 @@ void BuildWireframeQuad(CustomGeometryBuilder builder,
         vertices[i + 4].position_ = Lerp(thisCorner, oppositeCorner, thickness * 0.5f);
 
         vertices[i].color_ = frame[i].color_;
-        vertices[i + 4].color_ = frame[i].color_;
+        vertices[i + 4].color_ = secondaryColors[i];
 
         // 4____5
         // |   /|
@@ -77,7 +77,7 @@ void BuildWireframeQuad(CustomGeometryBuilder builder,
 }
 
 void BuildWireframeTesseract(CustomGeometryBuilder builder,
-    ea::span<const SimpleVertex, 16> frame, float thickness)
+    ea::span<const SimpleVertex, 16> frame, ea::span<const Color, 16> secondaryColors, float thickness)
 {
     // Vertex order:
     //  6--7
@@ -94,13 +94,18 @@ void BuildWireframeTesseract(CustomGeometryBuilder builder,
         { 1, 5, 7, 3 }
     };
     SimpleVertex faceFrame[4];
+    Color faceSecondaryColors[4];
     for (unsigned i = 0; i < 6; ++i)
     {
         for (unsigned j = 0; j < 2; ++j)
         {
             for (unsigned k = 0; k < 4; ++k)
-                faceFrame[k] = frame[faces[i][k] + j * 8];
-            BuildWireframeQuad(builder, faceFrame, thickness);
+            {
+                const unsigned index = faces[i][k] + j * 8;
+                faceFrame[k] = frame[index];
+                faceSecondaryColors[k] = secondaryColors[index];
+            }
+            BuildWireframeQuad(builder, faceFrame, faceSecondaryColors, thickness);
         }
     }
     const unsigned edges[12][2] =
@@ -123,7 +128,7 @@ void BuildWireframeTesseract(CustomGeometryBuilder builder,
         const unsigned face[4] = { edges[i][0], edges[i][1], edges[i][1] + 8, edges[i][0] + 8 };
         for (unsigned j = 0; j < 4; ++j)
             faceFrame[j] = frame[face[j]];
-        BuildWireframeQuad(builder, faceFrame, thickness);
+        BuildWireframeQuad(builder, faceFrame, faceSecondaryColors, thickness);
     }
 }
 

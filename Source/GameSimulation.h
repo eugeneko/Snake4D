@@ -51,9 +51,30 @@ struct RenderSettings
     float deathShakeSaturation_{ 8.0f };
     float deathCollapseSpeed_{ 3.0f };
 
-    Color snakeBaseColor_{ Color::WHITE };
-    Color snakeRedColor_{ Color::RED };
-    Color snakeBlueColor_{ Color::BLUE };
+    ColorTriplet snakeColor_{
+        { 1.0f, 1.0f, 1.0f, 1.0f },
+        { 1.0f, 0.0f, 0.0f, 1.0f },
+        { 0.0f, 0.0f, 1.0f, 1.0f }
+    };
+    ColorTriplet secondarySnakeColor_{
+        { 0.7f, 0.7f, 0.7f, 1.0f },
+        { 0.7f, 0.0f, 0.0f, 1.0f },
+        { 0.0f, 0.0f, 0.7f, 1.0f }
+    };
+    float snakeThickness_{ 0.025f };
+
+    ColorTriplet targetColor_{
+        { 0.0f, 1.0f, 0.0f, 1.0f },
+        { 1.0f, 0.0f, 0.0f, 1.0f },
+        { 0.0f, 0.0f, 1.0f, 1.0f }
+    };
+    ColorTriplet secondaryTargetColor_{
+        { 0.0f, 1.0f, 0.0f, 1.0f },
+        { 0.0f, 1.0f, 0.0f, 1.0f },
+        { 0.0f, 1.0f, 0.0f, 1.0f }
+    };
+    float targetThickness_{ 0.1f };
+
     Color borderColor_{ 1.0f, 1.0f, 1.0f, 0.3f };
     Color guidelineColor_{ 1.0f, 1.0f, 1.0f, 0.3f };
 };
@@ -266,8 +287,11 @@ private:
 
     void RenderAnimatedSnake(Scene4D& scene, float blendFactor) const
     {
-        const ColorTriplet snakeColor{ renderSettings_.snakeBaseColor_,
-            renderSettings_.snakeRedColor_, renderSettings_.snakeBlueColor_ };
+        Tesseract tesseract;
+        tesseract.color_ = renderSettings_.snakeColor_;
+        tesseract.secondaryColor_ = renderSettings_.secondarySnakeColor_;
+        tesseract.thickness_ = renderSettings_.snakeThickness_;
+
         const float snakeMovementFactor = Clamp(blendFactor * animationSettings_.snakeMovementSpeed_, 0.0f, 1.0f);
 
         const unsigned oldLength = previousSnake_.size();
@@ -285,15 +309,18 @@ private:
 
             const Vector4 previousPosition = IndexToPosition(previousSnake_[i]);
             const Vector4 currentPosition = IndexToPosition(snake_[i]);
-            const Vector4 position = Lerp(previousPosition, currentPosition, snakeMovementFactor);
             if (size > M_EPSILON)
-                scene.wireframeTesseracts_.push_back(Tesseract{ position, size * Vector4::ONE, snakeColor });
+            {
+                tesseract.position_ = Lerp(previousPosition, currentPosition, snakeMovementFactor);
+                tesseract.size_ = size * Vector4::ONE;
+                scene.wireframeTesseracts_.push_back(tesseract);
+            }
         }
         for (unsigned i = commonLength; i < newLength; ++i)
         {
-            const Vector4 currentPosition = IndexToPosition(snake_[i]);
-            const Vector4 currentSize = Vector4::ONE * snakeMovementFactor;
-            scene.wireframeTesseracts_.push_back(Tesseract{ currentPosition, currentSize, snakeColor });
+            tesseract.position_ = IndexToPosition(snake_[i]);
+            tesseract.size_ = Vector4::ONE * snakeMovementFactor;
+            scene.wireframeTesseracts_.push_back(tesseract);
         }
     }
 
@@ -407,7 +434,13 @@ private:
     {
         // Render target
         static const ColorTriplet targetColor{ Color::GREEN, { 1.0f, 1.0f, 0.0f }, { 0.0f, 1.0f, 1.0f } };
-        scene.wireframeTesseracts_.push_back(Tesseract{ IndexToPosition(targetPosition_), Vector4::ONE * 0.6f, targetColor });
+        scene.wireframeTesseracts_.push_back(Tesseract{
+            IndexToPosition(targetPosition_),
+            Vector4::ONE * 0.6f,
+            renderSettings_.targetColor_,
+            renderSettings_.secondaryTargetColor_,
+            renderSettings_.targetThickness_
+        });
     }
 
     ea::pair<IntVector4, bool> GetNextTargetPosition()

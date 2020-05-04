@@ -12,6 +12,7 @@ namespace Urho3D
 
 struct ColorTriplet
 {
+    ColorTriplet() = default;
     ColorTriplet(const Color& color) : base_(color), red_(color), blue_(color) {}
     ColorTriplet(const Color& base, const Color& red, const Color& blue) : base_(base), red_(red), blue_(blue) {}
 
@@ -31,6 +32,8 @@ struct Tesseract
     Vector4 position_;
     Vector4 size_;
     ColorTriplet color_;
+    ColorTriplet secondaryColor_;
+    float thickness_{};
 };
 
 struct Quad

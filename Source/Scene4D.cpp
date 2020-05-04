@@ -32,14 +32,16 @@ void Scene4D::Render(CustomGeometryBuilder builder) const
     }
 
     SimpleVertex vertices[16];
+    Color secondaryColors[16];
     for (const Tesseract& tesseract : wireframeTesseracts_)
     {
         for (unsigned i = 0; i < 16; ++i)
         {
             const Vector4 vertexPosition = tesseractVertices[i] * tesseract.size_ + tesseract.position_;
             vertices[i] = ConvertWorldToProj(vertexPosition, tesseract.color_);
+            secondaryColors[i] = ConvertWorldToProj(vertexPosition, tesseract.secondaryColor_).color_;
         }
-        BuildWireframeTesseract(builder, vertices, 0.025f );
+        BuildWireframeTesseract(builder, vertices, secondaryColors, tesseract.thickness_ );
     }
 
     // Helper to draw quads
