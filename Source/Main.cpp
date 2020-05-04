@@ -140,7 +140,7 @@ public:
 
     void Update(float timeStep)
     {
-        DoUpdate();
+        DoUpdate(timeStep);
 
         const auto animationType = sim_.GetCurrentAnimationType(GetLogicInterpolationFactor());
         const float currentPeriod = settings_.CalculateCurrentPeriod(GetScore(), animationType);
@@ -150,7 +150,7 @@ public:
         if (!paused_)
         {
             logicTimeAccumulator_ += logicTimeStep;
-            sim_.UpdateAnimation(timeStep);
+            sim_.UpdateAnimation(timeStep / GetArtificialSlowdown());
         }
 
         while (logicTimeAccumulator_ >= updatePeriod_)
@@ -169,7 +169,7 @@ public:
     }
 
 protected:
-    virtual void DoUpdate() = 0;
+    virtual void DoUpdate(float timeStep) = 0;
     virtual void DoTick() { sim_.Tick(); }
 
     bool paused_{};
@@ -188,7 +188,7 @@ public:
     ClassicGameSession(Context* context) : GameSession(context) {}
 
 protected:
-    void DoUpdate() override
+    void DoUpdate(float /*timeStep*/) override
     {
         // Apply input
         auto input = context_->GetSubsystem<Input>();
@@ -264,7 +264,7 @@ public:
         }
     }
 
-    float GetArtificialSlowdown()
+    float GetArtificialSlowdown() override
     {
         if (sim_.GetNextAction() != sim_.GetBestAction())
             return settings_.tutorialHintSlowdown_; // User doesn't follow tutorial, do slow-mo
@@ -275,10 +275,10 @@ public:
     };
 
 protected:
-    void DoUpdate() override
+    void DoUpdate(float timeStep) override
     {
         if (sim_.GetBestAction() != sim_.GetNextAction())
-            ClassicGameSession::DoUpdate();
+            ClassicGameSession::DoUpdate(timeStep);
     }
 
     void DoTick() override
@@ -309,7 +309,7 @@ public:
     DemoGameSession(Context* context)
         : GameSession(context)
     {
-        settings_.scoreToPeriod_ = { { 0, 0.3f } };
+        settings_.scoreToPeriod_ = { { 0, 0.4f } };
         settings_.animationSettings_.snakeMovementSpeed_ = 3.0f;
         settings_.animationSettings_.cameraTranslationSpeed_ = 1.0f;
         settings_.animationSettings_.cameraRotationSpeed_ = 1.5f;
@@ -320,7 +320,7 @@ public:
     ea::string GetScoreString() override { return FormatScore("AI Score", GetScore()); }
 
 protected:
-    void DoUpdate() override
+    void DoUpdate(float timeStep) override
     {
     }
     void DoTick() override
@@ -339,7 +339,18 @@ public:
 
     bool IsResumable() override { return false; }
 
-    ea::string GetScoreString() override { return paused_ ? "" : "Press Tab to play"; }
+    ea::string GetScoreString() override { return paused_ ? "" : "Demo game played by AI"; }
+
+    float GetArtificialSlowdown() override { return Lerp(1.0f, 5.0f, slowdown_); }
+
+protected:
+    void DoUpdate(float timeStep) override
+    {
+        DemoGameSession::DoUpdate(timeStep);
+        slowdown_ = ea::max(0.0f, slowdown_ - timeStep * 0.1f);
+    }
+
+    float slowdown_{ 1.0f };
 };
 
 class GameUI : public Object
@@ -491,7 +502,7 @@ private:
         exitButton->SetEnabled(false);
 #endif
 
-        // Create label
+        // Create score label
         {
             scoreLabelWindow_ = uiRoot->CreateChild<Window>("Score Label Window");;
             scoreLabelWindow_->SetLayout(LM_VERTICAL, padding_, { padding_, padding_, padding_, padding_ });
@@ -501,6 +512,30 @@ private:
             scoreLabelText_ = scoreLabelWindow_->CreateChild<Text>("Score Label");
             scoreLabelText_->SetStyleAuto();
             scoreLabelText_->SetFontSize(menuFontSize_);
+        }
+
+        // Create menu hint
+        {
+            auto menuHintWindow = uiRoot->CreateChild<Window>("Menu Hint Label Window");;
+            menuHintWindow->SetLayout(LM_VERTICAL, padding_, { padding_, padding_, padding_, padding_ });
+            menuHintWindow->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
+            menuHintWindow->SetStyleAuto();
+
+            auto menuHintText = menuHintWindow->CreateChild<Text>("Menu Hint Label");
+            menuHintText->SetStyleAuto();
+            menuHintText->SetFontSize(menuFontSize_);
+            menuHintText->SetText("Press [Tab] to Pause & Open Menu");
+
+            IntVector2 hintSize;
+            hintSize.x_ = menuHintText->GetMinWidth() + padding_ * 2;
+            hintSize.y_ = menuHintText->GetMinHeight() + padding_ * 2;
+
+            menuHintWindow->SetMinAnchor(1.0f, 0.0f);
+            menuHintWindow->SetMaxAnchor(1.0f, 0.0f);
+            menuHintWindow->SetPivot(0.0f, 0.0f);
+            menuHintWindow->SetEnableAnchor(true);
+            menuHintWindow->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
+
         }
 
         // Create hint box
@@ -522,9 +557,7 @@ private:
 
             tutorialHintWindow_->SetMinAnchor(0.5f, 0.45f);
             tutorialHintWindow_->SetMaxAnchor(0.5f, 0.45f);
-            tutorialHintWindow_->SetPivot(0.0f, 0.0f);
-            tutorialHintWindow_->SetMinOffset(-hintSize / 2);
-            tutorialHintWindow_->SetMaxOffset(hintSize / 2);
+            tutorialHintWindow_->SetPivot(0.5f, 0.5f);
             tutorialHintWindow_->SetEnableAnchor(true);
             tutorialHintWindow_->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
 
@@ -705,6 +738,8 @@ void MainApplication::Start()
         gameUI_->Update();
         return !!gameSession;
     };
+
+    SetRandomSeed(static_cast<unsigned>(time(0)));
 
     gameUI_ = MakeShared<GameUI>(context_);
     gameUI_->Initialize(MakeShared<FirstDemoGameSession>(context_));

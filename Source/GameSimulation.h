@@ -66,13 +66,13 @@ struct RenderSettings
 
     ColorTriplet targetColor_{
         { 0.0f, 1.0f, 0.0f, 1.0f },
-        { 1.0f, 0.0f, 0.0f, 1.0f },
-        { 0.0f, 0.0f, 1.0f, 1.0f }
+        { 1.0f, 0.5f, 0.0f, 1.0f },
+        { 0.0f, 0.5f, 1.0f, 1.0f }
     };
     ColorTriplet secondaryTargetColor_{
-        { 0.0f, 1.0f, 0.0f, 1.0f },
-        { 0.0f, 1.0f, 0.0f, 1.0f },
-        { 0.0f, 1.0f, 0.0f, 1.0f }
+        { 0.0f, 0.7f, 0.0f, 1.0f },
+        { 0.7f, 0.3f, 0.0f, 1.0f },
+        { 0.0f, 0.3f, 0.7f, 1.0f }
     };
     float targetThickness_{ 0.1f };
 
@@ -84,8 +84,8 @@ struct RenderSettings
     float borderDistanceFade_{ 3.0f };
 
     ColorTriplet guidelineColor_{ { 0.3f, 1.0f, 0.3f, 0.6f } };
-    ColorTriplet redGuidelineColor_{ { 1.0f, 0.3f, 0.3f, 0.6f } };
-    ColorTriplet blueGuidelineColor_{ { 0.5f, 0.5f, 1.0f, 0.6f } };
+    ColorTriplet redGuidelineColor_{ { 1.0f, 0.7f, 0.3f, 0.6f } };
+    ColorTriplet blueGuidelineColor_{ { 0.5f, 0.7f, 1.0f, 0.6f } };
     float openGuidelineSize_{ 0.14f };
     float blockedGuidelineSize_{ 0.04f };
 };
@@ -142,10 +142,13 @@ public:
         RenderSceneBorders(scene);
         RenderObjects(scene, blendFactor);
 
-        if (exactGuidelines_)
-            RenderExactGuidelines(scene);
-        else
-            RenderRawGuidelines(scene);
+        if (!gameOver_)
+        {
+            if (exactGuidelines_)
+                RenderExactGuidelines(scene);
+            else
+                RenderRawGuidelines(scene);
+        }
     }
 
     void SetAnimationSettings(const AnimationSettings& animationSettings)
@@ -182,6 +185,16 @@ public:
             { 2, 3, -90.0f }, // Blue
             { 0, 3,  90.0f }, // XRoll
         };
+
+        // if the next action lead to immediate death, rollback it
+        if (!gameOver_)
+        {
+            auto testCamera = camera_;
+            const RotationDelta4D testRotationDelta = rotations[static_cast<unsigned>(nextAction_)];
+            testCamera.Step(testRotationDelta, true);
+            if (IsOutside(testCamera.GetCurrentPosition()))
+                nextAction_ = UserAction::None;
+        }
 
         // Apply user action
         const bool move = !gameOver_;
@@ -231,7 +244,8 @@ public:
         }
 
         // Update path
-        bestAction_ = EstimateBestAction();
+        if (!gameOver_)
+            bestAction_ = EstimateBestAction();
     }
 
     UserAction GetNextAction() const { return nextAction_; }
@@ -241,6 +255,9 @@ public:
     UserAction EstimateBestAction()
     {
         const IntVector4& startPosition = camera_.GetCurrentPosition();
+        if (IsOutside(startPosition))
+            return UserAction::None;
+
         const IntVector4& startDirection = camera_.GetCurrentDirection();
         const auto checkCell = [&](const IntVector4& position) { return IsValidHeadPosition(position); };
 
@@ -289,11 +306,16 @@ public:
     unsigned GetSnakeLength() const { return snake_.size(); }
 
 private:
-    bool IsValidHeadPosition(const IntVector4& position) const
+    bool IsOutside(const IntVector4& position) const
     {
         const IntVector4 boxBegin{ 0, 0, 0, 0 };
         const IntVector4 boxEnd{ size_, size_, size_, size_ };
-        if (!IsInside(position, boxBegin, boxEnd))
+        return !IsInside(position, boxBegin, boxEnd);
+    }
+
+    bool IsValidHeadPosition(const IntVector4& position) const
+    {
+        if (IsOutside(position))
             return false;
 
         for (unsigned i = 1; i < snake_.size(); ++i)
@@ -551,6 +573,11 @@ private:
             const Vector3 guidelineElement = VectorRound(static_cast<Vector3>(viewSpacePosition));
             guideline.insert(guidelineElement);
         }
+
+        // Always remove head
+        const Vector4 headViewSpacePosition = worldToViewSpaceTransform * IndexToPosition(snake_.front());
+        const Vector3 headGuidelineElement = VectorRound(static_cast<Vector3>(headViewSpacePosition));
+        guideline.erase(headGuidelineElement);
 
         // Render guideline
         for (const Vector3& guidelineElement : guideline)
