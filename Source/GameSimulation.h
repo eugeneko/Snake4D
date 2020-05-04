@@ -76,6 +76,12 @@ struct RenderSettings
     float targetThickness_{ 0.1f };
 
     Color borderColor_{ 1.0f, 1.0f, 1.0f, 0.3f };
+    float borderQuadSize_{ 0.8f };
+    float borderHyperThreshold_{ 0.2f };
+    float borderBackwardThreshold_{ 0.4f };
+    float borderUpwardThreshold_{ 0.4f };
+    float borderDistanceFade_{ 3.0f };
+
     Color guidelineColor_{ 1.0f, 1.0f, 1.0f, 0.3f };
 };
 
@@ -326,8 +332,6 @@ private:
 
     void RenderSceneBorders(Scene4D& scene) const
     {
-        const ColorTriplet borderColor = renderSettings_.borderColor_;
-
         // Render borders
         static const IntVector4 directions[8] = {
             { +1, 0, 0, 0 },
@@ -341,31 +345,63 @@ private:
         };
 
         const int hyperAxisIndex = FindHyperAxis(scene.cameraTransform_.rotation_);
+        const Vector4 hyperFlattenMask = GetAxisFlattenMask(hyperAxisIndex);
+        const Vector4 cameraPosition = IndexToPosition(camera_.GetCurrentPosition());
+
         const float halfSize = size_ * 0.5f;
         for (int directionIndex = 0; directionIndex < 4; ++directionIndex)
         {
             for (float sign : { -1.0f, 1.0f })
             {
-                const float threshold = 0.2f;
                 const Vector4 direction = MakeDirection(directionIndex, sign);
                 const Vector4 viewSpaceDirection = scene.cameraTransform_.rotation_ * direction;
-                if (Abs(viewSpaceDirection.w_) > threshold)
+
+                if (Abs(viewSpaceDirection.w_) > renderSettings_.borderHyperThreshold_)
+                    continue;
+                if (viewSpaceDirection.z_ < -renderSettings_.borderBackwardThreshold_)
                     continue;
 
                 const auto quadPlaneAxises = FlipAxisPair(directionIndex, hyperAxisIndex);
                 const Vector4 xAxis = MakeDirection(quadPlaneAxises.first, 1);
                 const Vector4 yAxis = MakeDirection(quadPlaneAxises.second, 1);
 
-                const float intensity = 1.0f - Abs(viewSpaceDirection.w_) / threshold;
+                const float hyperIntensity = ea::max(0.0f,
+                    1.0f - Abs(viewSpaceDirection.w_) / renderSettings_.borderHyperThreshold_);
+                const float backwardIntensity = Clamp(InverseLerp(
+                    1.0f, renderSettings_.borderBackwardThreshold_, -viewSpaceDirection.z_), 0.0f, 1.0f);
+                const float upwardFade = Clamp(InverseLerp(
+                    renderSettings_.borderUpwardThreshold_, 1.0f, viewSpaceDirection.y_), 0.0f, 1.0f);
+
                 for (int x = 0; x < size_; ++x)
                 {
                     for (int y = 0; y < size_; ++y)
                     {
-                        const Vector4 position = Vector4::ONE * halfSize
+                        Quad quad;
+
+                        quad.position_ = Vector4::ONE * halfSize
                             + direction * halfSize
                             + xAxis * (x - halfSize + 0.5f)
                             + yAxis * (y - halfSize + 0.5f);
-                        scene.solidQuads_.push_back(Quad{ position, xAxis * 0.8f, yAxis * 0.8f, borderColor });
+                        quad.position_ *= hyperFlattenMask;
+                        quad.position_ += (Vector4::ONE - hyperFlattenMask) * cameraPosition;
+
+                        const Vector4 quadToHead = quad.position_ - cameraPosition;
+                        const float distanceToHead = Sqrt(quadToHead.DotProduct(quadToHead));
+                        const float distanceIntensity = Clamp(InverseLerp(
+                            renderSettings_.borderDistanceFade_, 0.0f, distanceToHead), 0.0f, 1.0f);
+
+                        float intensity = hyperIntensity * backwardIntensity;
+                        intensity *= Lerp(1.0f, distanceIntensity, upwardFade);
+
+                        quad.deltaX_ = xAxis * renderSettings_.borderQuadSize_;
+                        quad.deltaY_ = yAxis * renderSettings_.borderQuadSize_;
+
+                        quad.color_ = ColorTriplet{ renderSettings_.borderColor_ };
+                        quad.color_.base_.a_ *= intensity;
+                        quad.color_.red_.a_  *= intensity;
+                        quad.color_.blue_.a_ *= intensity;
+
+                        scene.solidQuads_.push_back(quad);
                     }
                 }
             }

@@ -182,4 +182,12 @@ inline int FindHyperAxis(const Matrix4& rotation)
     return axis;
 }
 
+inline Vector4 GetAxisFlattenMask(int axis)
+{
+    float mask[4]{};
+    for (int i = 0; i < 4; ++i)
+        mask[i] = axis == i ? 0.0f : 1.0f;
+    return Vector4{ mask };
+}
+
 }
