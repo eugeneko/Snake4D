@@ -36,14 +36,14 @@ void BuildSolidQuad(CustomGeometryBuilder builder, ea::span<const SimpleVertex, 
 }
 
 void BuildWireframeQuad(CustomGeometryBuilder builder,
-    ea::span<const SimpleVertex, 4> frame, const Vector2& thickness)
+    ea::span<const SimpleVertex, 4> frame, float thickness)
 {
     // Vertex order:
     // 3 2
     // 0 1
 
-    SimpleVertex vertices[4 * 3];
-    unsigned indices[3 * 4 * 3];
+    SimpleVertex vertices[4 * 2];
+    unsigned indices[3 * 4 * 2];
     unsigned j = 0;
     for (unsigned i = 0; i < 4; ++i)
     {
@@ -51,32 +51,25 @@ void BuildWireframeQuad(CustomGeometryBuilder builder,
         const Vector3 nextCorner = frame[(i + 1) % 4].position_;
         const Vector3 oppositeCorner = frame[(i + 2) % 4].position_;
         const Vector3 nextOppositeCorner = frame[(i + 3) % 4].position_;
-        const Vector3 middlePoint = Lerp(thisCorner, nextCorner, 0.5f);
-        const Vector3 oppositeMiddlePoint = Lerp(oppositeCorner, nextOppositeCorner, 0.5f);
 
         vertices[i].position_ = thisCorner;
-        vertices[i + 4].position_ = Lerp(thisCorner, oppositeCorner, thickness.x_ * 0.5f);
-        vertices[i + 8].position_ = Lerp(middlePoint, oppositeMiddlePoint, thickness.y_ * 0.5f);
+        vertices[i + 4].position_ = Lerp(thisCorner, oppositeCorner, thickness * 0.5f);
 
         vertices[i].color_ = frame[i].color_;
         vertices[i + 4].color_ = frame[i].color_;
-        vertices[i + 8].color_ = Lerp(frame[i].color_, frame[(i + 1) % 4].color_, 0.5f);
 
-        // |\  /|
-        // | \/ |
-        // | /\ |
-        // |/__\|
+        // 4____5
+        // |   /|
+        // |  / |
+        // | /  |
+        // |/__ |
         // 0    1
         indices[j++] = i;
         indices[j++] = i + 4;
-        indices[j++] = i + 8;
-
-        indices[j++] = i + 8;
         indices[j++] = (i + 1) % 4 + 4;
-        indices[j++] = (i + 1) % 4;
 
         indices[j++] = i;
-        indices[j++] = i + 8;
+        indices[j++] = (i + 1) % 4 + 4;
         indices[j++] = (i + 1) % 4;
     }
 
@@ -84,7 +77,7 @@ void BuildWireframeQuad(CustomGeometryBuilder builder,
 }
 
 void BuildWireframeTesseract(CustomGeometryBuilder builder,
-    ea::span<const SimpleVertex, 16> frame, const Vector2& thickness)
+    ea::span<const SimpleVertex, 16> frame, float thickness)
 {
     // Vertex order:
     //  6--7

@@ -28,9 +28,9 @@ void BuildSolidQuad(CustomGeometryBuilder builder,
     ea::span<const SimpleVertex, 4> frame);
 
 void BuildWireframeQuad(CustomGeometryBuilder builder,
-    ea::span<const SimpleVertex, 4> frame, const Vector2& thickness);
+    ea::span<const SimpleVertex, 4> frame, float thickness);
 
 void BuildWireframeTesseract(CustomGeometryBuilder builder,
-    ea::span<const SimpleVertex, 16> frame, const Vector2& thickness);
+    ea::span<const SimpleVertex, 16> frame, float thickness);
 
 }
