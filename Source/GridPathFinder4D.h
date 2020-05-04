@@ -33,6 +33,13 @@ public:
             : IntVector4{};
     }
 
+    ea::span<const IntVector4> GetPath() const
+    {
+        if (path_.size() >= MinElements)
+            return { path_.begin() + NextElement, path_.end() };
+        return {};
+    }
+
 private:
     struct OpenSetNode
     {

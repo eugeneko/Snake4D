@@ -7,6 +7,7 @@
 
 #include <EASTL/queue.h>
 #include <EASTL/priority_queue.h>
+#include <EASTL/fixed_set.h>
 
 #include <cmath>
 
@@ -43,9 +44,6 @@ struct AnimationSettings
 
 struct RenderSettings
 {
-    float openGuidelineSize_{ 0.2f };
-    float blockedGuidelineSize_{ 0.08f };
-
     float deathShakeMagnitude_{ 0.3f };
     float deathShakeFrequency_{ 11.0f };
     float deathShakeSaturation_{ 8.0f };
@@ -82,8 +80,15 @@ struct RenderSettings
     float borderUpwardThreshold_{ 0.4f };
     float borderDistanceFade_{ 3.0f };
 
-    Color guidelineColor_{ 1.0f, 1.0f, 1.0f, 0.3f };
+    ColorTriplet guidelineColor_{ { 1.0f, 1.0f, 1.0f, 0.3f } };
+    float openGuidelineSize_{ 0.2f };
+    float blockedGuidelineSize_{ 0.08f };
 };
+
+inline bool operator < (const Vector3& lhs, const Vector3& rhs)
+{
+    return ea::tie(lhs.x_, lhs.y_, lhs.z_) < ea::tie(rhs.x_, rhs.y_, rhs.z_);
+}
 
 class GameSimulation
 {
@@ -94,10 +99,10 @@ public:
         : size_(size)
         , pathFinder_(size)
     {
-        Reset();
+        Reset({});
     }
 
-    void Reset()
+    void Reset(ea::span<const IntVector4> targets)
     {
         const IntVector4 previousPosition{ size_ / 2, size_ / 2, size_ * 1 / 4 - 1, size_ / 2 };
         snake_.clear();
@@ -107,29 +112,35 @@ public:
 
         camera_.Reset(snake_.front(), { 0, 0, 1, 0 }, Matrix4::IDENTITY);
         targetPosition_ = { size_ / 2, size_ / 2, size_ * 3 / 4, size_ / 2 };
-    }
 
-    void SetLengthIncrement(unsigned lengthIncrement) { lengthIncrement_ = lengthIncrement; }
-
-    void SetEnableRolls(bool enableRolls) { enableRolls_ = enableRolls; }
-
-    void EnqueueTargets(ea::span<const IntVector4> targets)
-    {
         targetQueue_.get_container().assign(targets.begin(), targets.end());
         if (!targetQueue_.empty())
         {
             targetPosition_ = targetQueue_.front();
             targetQueue_.pop();
         }
+
+        // Update path
+        bestAction_ = EstimateBestAction();
     }
+
+    void SetLengthIncrement(unsigned lengthIncrement) { lengthIncrement_ = lengthIncrement; }
+
+    void SetEnableRolls(bool enableRolls) { enableRolls_ = enableRolls; }
+
+    void SetExactGuidelines(bool exactGuidelines) { exactGuidelines_ = exactGuidelines; }
 
     void Render(Scene4D& scene, float blendFactor) const
     {
         ResetScene(scene, blendFactor);
         RenderAnimatedSnake(scene, blendFactor);
         RenderSceneBorders(scene);
-        RenderGuidelines(scene);
         RenderObjects(scene, blendFactor);
+
+        if (exactGuidelines_)
+            RenderExactGuidelines(scene);
+        else
+            RenderRawGuidelines(scene);
     }
 
     void SetAnimationSettings(const AnimationSettings& animationSettings)
@@ -202,11 +213,16 @@ public:
             gameOver_ = true;
             deathAnimation_ = true;
         }
+
+        // Update path
+        bestAction_ = EstimateBestAction();
     }
 
     UserAction GetNextAction() const { return nextAction_; }
 
-    UserAction GetBestAction()
+    UserAction GetBestAction() const { return bestAction_; }
+
+    UserAction EstimateBestAction()
     {
         const IntVector4& startPosition = camera_.GetCurrentPosition();
         const IntVector4& startDirection = camera_.GetCurrentDirection();
@@ -408,10 +424,8 @@ private:
         }
     }
 
-    void RenderGuidelines(Scene4D& scene) const
+    void RenderRawGuidelines(Scene4D& scene) const
     {
-        const ColorTriplet guidelineColor{ renderSettings_.guidelineColor_ };
-
         const Vector4 viewSpaceTargetPosition = camera_.GetCurrentViewMatrix() * IndexToPosition(targetPosition_);
         const Matrix4x5 viewToWorldSpaceTransform = camera_.GetCurrentModelMatrix();
 
@@ -426,7 +440,13 @@ private:
             const Vector4 worldSpacePosition = viewToWorldSpaceTransform * viewSpacePosition;
             const bool isValidLocation = IsValidHeadPosition(PositionToIndex(worldSpacePosition));
             const float size = isValidLocation ? renderSettings_.openGuidelineSize_ : renderSettings_.blockedGuidelineSize_;
-            const Cube cube{ worldSpacePosition, size * xAxis, size * yAxis, size * zAxis, guidelineColor };
+
+            Cube cube;
+            cube.position_ = worldSpacePosition;
+            cube.deltaX_ = size * xAxis;
+            cube.deltaY_ = size * yAxis;
+            cube.deltaZ_ = size * zAxis;
+            cube.color_ = renderSettings_.guidelineColor_;
             scene.solidCubes_.push_back(cube);
         };
 
@@ -450,7 +470,7 @@ private:
             for (int i = 1; i <= Abs(xDeltaInt); ++i)
             {
                 const float x = static_cast<float>(i * Sign(xDeltaInt));
-                createElement(x, 0.0f, zDelta);
+                createElement(x, 0.0f, ea::max(0.0f, zDelta));
             }
         }
 
@@ -461,9 +481,48 @@ private:
             for (int i = 1; i <= Abs(yDelta); ++i)
             {
                 const float y = static_cast<float>(i * Sign(yDelta));
-                createElement(xDelta, y, zDelta);
+                createElement(xDelta, y, ea::max(0.0f, zDelta));
             }
         }
+    }
+
+    void RenderExactGuidelines(Scene4D& scene) const
+    {
+        const Matrix4x5 worldToViewSpaceTransform = camera_.GetCurrentViewMatrix();
+        const Matrix4x5 viewToWorldSpaceTransform = camera_.GetCurrentModelMatrix();
+
+        const Vector4 xAxis = viewToWorldSpaceTransform.rotation_ * Vector4(1.0f, 0.0f, 0.0f, 0.0f);
+        const Vector4 yAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 1.0f, 0.0f, 0.0f);
+        const Vector4 zAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 0.0f, 1.0f, 0.0f);
+
+        // Helper to create guideline element
+        const auto createElement = [&](const Vector3& viewSpacePosition)
+        {
+            const Vector4 worldSpacePosition = viewToWorldSpaceTransform * Vector4{ viewSpacePosition, 0.0f };
+            const bool isValidLocation = IsValidHeadPosition(PositionToIndex(worldSpacePosition));
+            const float size = isValidLocation ? renderSettings_.openGuidelineSize_ : renderSettings_.blockedGuidelineSize_;
+
+            Cube cube;
+            cube.position_ = worldSpacePosition;
+            cube.deltaX_ = size * xAxis;
+            cube.deltaY_ = size * yAxis;
+            cube.deltaZ_ = size * zAxis;
+            cube.color_ = renderSettings_.guidelineColor_;
+            scene.solidCubes_.push_back(cube);
+        };
+
+        // Collect cubes to render
+        ea::fixed_set<Vector3, 1024> guideline;
+        for (const IntVector4& pathElement : pathFinder_.GetPath())
+        {
+            const Vector4 viewSpacePosition = worldToViewSpaceTransform * IndexToPosition(pathElement);
+            const Vector3 guidelineElement = VectorRound(static_cast<Vector3>(viewSpacePosition));
+            guideline.insert(guidelineElement);
+        }
+
+        // Render guideline
+        for (const Vector3& guidelineElement : guideline)
+            createElement(guidelineElement);
     }
 
     void RenderObjects(Scene4D& scene, float blendFactor) const
@@ -527,11 +586,13 @@ private:
     GridCamera4D camera_;
 
     UserAction nextAction_{};
+    UserAction bestAction_{};
     bool gameOver_{};
     bool deathAnimation_{};
 
     unsigned lengthIncrement_{ 3 };
     bool enableRolls_{ true };
+    bool exactGuidelines_{ false };
     unsigned pendingGrowth_{};
     ea::vector<IntVector4> snake_;
     ea::vector<IntVector4> previousSnake_;

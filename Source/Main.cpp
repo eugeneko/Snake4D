@@ -115,7 +115,7 @@ public:
     GameSession(Context* context)
         : Object(context)
     {
-        sim_.EnqueueTargets(standardTargets);
+        sim_.Reset(standardTargets);
     }
 
     virtual bool IsResumable() { return true; }
@@ -215,7 +215,8 @@ public:
     TutorialGameSession(Context* context)
         : ClassicGameSession(context)
     {
-        sim_.EnqueueTargets(tutorialTargets);
+        sim_.Reset(tutorialTargets);
+        sim_.SetExactGuidelines(true);
     }
 
     bool IsTutorialHintVisible() override { return true; };
