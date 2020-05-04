@@ -66,6 +66,7 @@ struct Scene4D
 
     Matrix4x5 cameraTransform_;
     ea::vector<Tesseract> wireframeTesseracts_;
+    ea::vector<ea::pair<Tesseract, Matrix4>> rotatedWireframeTesseracts_;
     ea::vector<Quad> solidQuads_;
     ea::vector<Cube> solidCubes_;
 
@@ -73,6 +74,7 @@ struct Scene4D
     {
         cameraTransform_ = camera;
         wireframeTesseracts_.clear();
+        rotatedWireframeTesseracts_.clear();
         solidQuads_.clear();
         solidCubes_.clear();
     }

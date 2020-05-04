@@ -44,6 +44,20 @@ void Scene4D::Render(CustomGeometryBuilder builder) const
         BuildWireframeTesseract(builder, vertices, secondaryColors, tesseract.thickness_ );
     }
 
+    for (const ea::pair<Tesseract, Matrix4>& elem : rotatedWireframeTesseracts_)
+    {
+        const Tesseract& tesseract = elem.first;
+        const Matrix4& rotation = elem.second;
+
+        for (unsigned i = 0; i < 16; ++i)
+        {
+            const Vector4 vertexPosition = rotation * (tesseractVertices[i] * tesseract.size_) + tesseract.position_;
+            vertices[i] = ConvertWorldToProj(vertexPosition, tesseract.color_);
+            secondaryColors[i] = ConvertWorldToProj(vertexPosition, tesseract.secondaryColor_).color_;
+        }
+        BuildWireframeTesseract(builder, vertices, secondaryColors, tesseract.thickness_ );
+    }
+
     // Helper to draw quads
     auto drawQuad = [&](CustomGeometryBuilder builder, const Quad& quad)
     {

@@ -44,6 +44,9 @@ struct AnimationSettings
 
 struct RenderSettings
 {
+    float targetRotationSpeed1_{ 0.25f };
+    float targetRotationSpeed2_{ 0.15f };
+
     float deathShakeMagnitude_{ 0.3f };
     float deathShakeFrequency_{ 11.0f };
     float deathShakeSaturation_{ 8.0f };
@@ -154,6 +157,17 @@ public:
     {
         if (!gameOver_)
             nextAction_ = action;
+    }
+
+    void UpdateAnimation(float timeStep)
+    {
+        targetAnimationTimer1_ -= timeStep * renderSettings_.targetRotationSpeed1_;
+        if (targetAnimationTimer1_ < 0.0f)
+            targetAnimationTimer1_ += 1.0f;
+
+        targetAnimationTimer2_ -= timeStep * renderSettings_.targetRotationSpeed2_;
+        if (targetAnimationTimer2_ < 0.0f)
+            targetAnimationTimer2_ += 1.0f;
     }
 
     void Tick()
@@ -546,14 +560,24 @@ private:
     void RenderObjects(Scene4D& scene, float blendFactor) const
     {
         // Render target
-        static const ColorTriplet targetColor{ Color::GREEN, { 1.0f, 1.0f, 0.0f }, { 0.0f, 1.0f, 1.0f } };
-        scene.wireframeTesseracts_.push_back(Tesseract{
-            IndexToPosition(targetPosition_),
-            Vector4::ONE * 0.6f,
-            renderSettings_.targetColor_,
-            renderSettings_.secondaryTargetColor_,
-            renderSettings_.targetThickness_
-        });
+        Tesseract tesseract;
+        tesseract.position_ = IndexToPosition(targetPosition_);
+        tesseract.size_ = Vector4::ONE * 0.6f;
+        tesseract.color_ = renderSettings_.targetColor_;
+        tesseract.secondaryColor_ = renderSettings_.secondaryTargetColor_;
+        tesseract.thickness_ = renderSettings_.targetThickness_;
+
+        const float angle1 = targetAnimationTimer1_ * 360.0f;
+        const float angle2 = targetAnimationTimer1_ * 360.0f + 90.0f;
+        const float angle3 = targetAnimationTimer2_ * 360.0f;
+        const float angle4 = targetAnimationTimer2_ * 360.0f + 90.0f;
+        const Matrix4x5 rotationMatrix
+            = Matrix4x5::MakeRotation(0, 1, angle1)
+            * Matrix4x5::MakeRotation(1, 2, angle2)
+            * Matrix4x5::MakeRotation(2, 3, angle3)
+            * Matrix4x5::MakeRotation(0, 3, angle4);
+
+        scene.rotatedWireframeTesseracts_.emplace_back(tesseract, rotationMatrix.rotation_);
     }
 
     ea::pair<IntVector4, bool> GetNextTargetPosition()
@@ -618,6 +642,9 @@ private:
     ea::queue<IntVector4> targetQueue_;
     IntVector4 targetPosition_{};
     GridPathFinder4D pathFinder_;
+
+    float targetAnimationTimer1_{};
+    float targetAnimationTimer2_{};
 };
 
 }

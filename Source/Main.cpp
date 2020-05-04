@@ -148,7 +148,10 @@ public:
         const float logicTimeStep = timeStep / logicUpdatePeriod;
 
         if (!paused_)
+        {
             logicTimeAccumulator_ += logicTimeStep;
+            sim_.UpdateAnimation(timeStep);
+        }
 
         while (logicTimeAccumulator_ >= updatePeriod_)
         {
