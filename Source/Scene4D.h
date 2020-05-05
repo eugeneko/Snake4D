@@ -36,6 +36,14 @@ struct Tesseract
     float thickness_{};
 };
 
+struct CustomTesseract
+{
+    ea::array<Vector4, 16> positions_;
+    ColorTriplet color_;
+    ColorTriplet secondaryColor_;
+    float thickness_{};
+};
+
 struct Quad
 {
     Vector4 position_;
@@ -65,6 +73,7 @@ struct Scene4D
     Vector3 cameraOffset_;
 
     Matrix4x5 cameraTransform_;
+    ea::vector<CustomTesseract> customTesseracts_;
     ea::vector<Tesseract> wireframeTesseracts_;
     ea::vector<ea::pair<Tesseract, Matrix4>> rotatedWireframeTesseracts_;
     ea::vector<Quad> solidQuads_;
@@ -75,6 +84,7 @@ struct Scene4D
         cameraTransform_ = camera;
         wireframeTesseracts_.clear();
         rotatedWireframeTesseracts_.clear();
+        customTesseracts_.clear();
         solidQuads_.clear();
         solidCubes_.clear();
     }

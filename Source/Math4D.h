@@ -53,6 +53,18 @@ inline IntVector4 RandomIntVector4(int range)
     return result;
 }
 
+inline ea::pair<int, int> IntVectorToAxis(const IntVector4& value)
+{
+    const unsigned numNonZero = (value[0] != 0) + (value[1] != 0) + (value[2] != 0) + (value[3] != 0);
+    assert(numNonZero == 1);
+    for (int i = 0; i < 4; ++i)
+    {
+        if (value[i] != 0)
+            return { i, Sign(value[i]) };
+    }
+    return {};
+}
+
 inline bool IsInside(const IntVector4& value, const IntVector4& begin, const IntVector4& end)
 {
     for (int i = 0; i < 4; ++i)
@@ -74,6 +86,30 @@ inline Vector4 IntVectorToVector4(const IntVector4& index)
 inline IntVector4 RoundVector4(const Vector4& vec)
 {
     return { RoundToInt(vec.x_), RoundToInt(vec.y_), RoundToInt(vec.z_), RoundToInt(vec.w_) };
+}
+
+inline Matrix4 MakeDeltaRotation(const IntVector4& from, const IntVector4& to)
+{
+    if (from == to)
+        return Matrix4::IDENTITY;
+
+    const auto fromAxis = IntVectorToAxis(from);
+    const auto toAxis = IntVectorToAxis(to);
+
+    // Fill identity part of the matrix
+    float rotation[4][4]{};
+    for (unsigned i = 0; i < 4; ++i)
+    {
+        if (i != fromAxis.first && i != toAxis.first)
+            rotation[i][i] = 1.0f;
+    }
+
+    // Fill rotation part of the matrix
+    const float sign = static_cast<float>(fromAxis.second * toAxis.second);
+    rotation[fromAxis.first][toAxis.first] = -sign;
+    rotation[toAxis.first][fromAxis.first] = sign;
+
+    return Matrix4{ &rotation[0][0] };
 }
 
 struct Matrix4x5

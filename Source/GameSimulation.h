@@ -95,6 +95,38 @@ inline bool operator < (const Vector3& lhs, const Vector3& rhs)
     return ea::tie(lhs.x_, lhs.y_, lhs.z_) < ea::tie(rhs.x_, rhs.y_, rhs.z_);
 }
 
+using CubeFrame = ea::array<Vector4, 8>;
+
+inline CubeFrame MakeInitialCubeFrame()
+{
+    return {
+        Vector4{ -1.0f, -1.0f, 0.0f, -1.0f },
+        Vector4{  1.0f, -1.0f, 0.0f, -1.0f },
+        Vector4{ -1.0f,  1.0f, 0.0f, -1.0f },
+        Vector4{  1.0f,  1.0f, 0.0f, -1.0f },
+        Vector4{ -1.0f, -1.0f, 0.0f,  1.0f },
+        Vector4{  1.0f, -1.0f, 0.0f,  1.0f },
+        Vector4{ -1.0f,  1.0f, 0.0f,  1.0f },
+        Vector4{  1.0f,  1.0f, 0.0f,  1.0f },
+    };
+}
+
+inline CubeFrame RotateCubeFrame(const CubeFrame& frame, const IntVector4& from, const IntVector4& to)
+{
+    const Matrix4 rotation = MakeDeltaRotation(from, to);
+    CubeFrame newFrame;
+    for (unsigned i = 0; i < 8; ++i)
+        newFrame[i] = VectorRound(rotation * frame[i]);
+    return newFrame;
+}
+
+struct SnakeElement
+{
+    IntVector4 position_;
+    CubeFrame beginFrame_;
+    IntVector4 beginFrameOffset_;
+};
+
 class GameSimulation
 {
 public:
@@ -112,10 +144,16 @@ public:
         const IntVector4 previousPosition{ size_ / 2, size_ / 2, size_ * 1 / 4 - 1, size_ / 2 };
         snake_.clear();
         for (int i = 0; i < 3; ++i)
-            snake_.push_back({ size_ / 2, size_ / 2, size_ * 1 / 4 - i, size_ / 2 });
+        {
+            SnakeElement element;
+            element.position_ = { size_ / 2, size_ / 2, size_ * 1 / 4 - i, size_ / 2 };
+            element.beginFrame_ = MakeInitialCubeFrame();
+            element.beginFrameOffset_ = { 0, 0, -1, 0 };
+            snake_.push_back(element);
+        }
         previousSnake_ = snake_;
 
-        camera_.Reset(snake_.front(), { 0, 0, 1, 0 }, Matrix4::IDENTITY);
+        camera_.Reset(GetSnakeHead(), { 0, 0, 1, 0 }, Matrix4::IDENTITY);
         targetPosition_ = { size_ / 2, size_ / 2, size_ * 3 / 4, size_ / 2 };
 
         targetQueue_.get_container().assign(targets.begin(), targets.end());
@@ -138,7 +176,8 @@ public:
     void Render(Scene4D& scene, float blendFactor) const
     {
         ResetScene(scene, blendFactor);
-        RenderAnimatedSnake(scene, blendFactor);
+        RenderSnakeHead(scene, blendFactor);
+        RenderSnakeTail(scene, blendFactor);
         RenderSceneBorders(scene);
         RenderObjects(scene, blendFactor);
 
@@ -210,16 +249,24 @@ public:
             return;
 
         // Move snake
-        const IntVector4 nextHeadPosition = camera_.GetCurrentPosition();
-        snake_.push_front(nextHeadPosition);
+        {
+            const IntVector4 newPosition = camera_.GetCurrentPosition();
+            const IntVector4 prevDirection = snake_[0].position_ - snake_[1].position_;
+            const IntVector4 newDirection = newPosition - snake_[0].position_;
 
-        if (nextHeadPosition == targetPosition_)
+            SnakeElement element;
+            element.position_ = newPosition;
+            element.beginFrame_ = RotateCubeFrame(snake_.front().beginFrame_, prevDirection, newDirection);
+            element.beginFrameOffset_ = snake_[0].position_ - newPosition;
+            snake_.push_front(element);
+        }
+
+        if (GetSnakeHead() == targetPosition_)
         {
             // Generate new target position
             auto newTarget = GetNextTargetPosition();
             if (!newTarget.second)
             {
-                // TODO: This is nearly impossible
                 gameOver_ = true;
                 return;
             }
@@ -237,7 +284,7 @@ public:
             --pendingGrowth_;
 
         // Check for collision
-        if (!IsValidHeadPosition(snake_.front()))
+        if (!IsValidHeadPosition(GetSnakeHead()))
         {
             gameOver_ = true;
             deathAnimation_ = true;
@@ -305,6 +352,8 @@ public:
 
     unsigned GetSnakeLength() const { return snake_.size(); }
 
+    IntVector4 GetSnakeHead() const { return snake_.front().position_; }
+
 private:
     bool IsOutside(const IntVector4& position) const
     {
@@ -320,7 +369,7 @@ private:
 
         for (unsigned i = 1; i < snake_.size(); ++i)
         {
-            if (position == snake_[i])
+            if (position == snake_[i].position_)
                 return false;
         }
         return true;
@@ -345,7 +394,32 @@ private:
         }
     }
 
-    void RenderAnimatedSnake(Scene4D& scene, float blendFactor) const
+    void RenderSnakeHead(Scene4D& scene, float blendFactor) const
+    {
+        const float snakeMovementFactor = Clamp(blendFactor * animationSettings_.snakeMovementSpeed_, 0.0f, 1.0f);
+        const float size = deathAnimation_
+            ? ea::max(0.0f, 1.0f - blendFactor * renderSettings_.deathCollapseSpeed_)
+            : gameOver_
+            ? 0.0f
+            : 1.0f;
+
+        if (size > M_EPSILON)
+        {
+            const Vector4 previousPosition = IndexToPosition(previousSnake_.front().position_);
+            const Vector4 currentPosition = IndexToPosition(snake_.front().position_);
+
+            Tesseract tesseract;
+            tesseract.position_ = Lerp(previousPosition, currentPosition, snakeMovementFactor);
+            tesseract.size_ = size * Vector4::ONE;
+            tesseract.color_ = renderSettings_.snakeColor_;
+            tesseract.secondaryColor_ = renderSettings_.secondarySnakeColor_;
+            tesseract.thickness_ = renderSettings_.snakeThickness_;
+
+            scene.wireframeTesseracts_.push_back(tesseract);
+        }
+    }
+
+    void RenderSnakeTail(Scene4D& scene, float blendFactor) const
     {
         Tesseract tesseract;
         tesseract.color_ = renderSettings_.snakeColor_;
@@ -357,28 +431,17 @@ private:
         const unsigned oldLength = previousSnake_.size();
         const unsigned newLength = snake_.size();
         const unsigned commonLength = ea::min(oldLength, newLength);
-        for (unsigned i = 0; i < commonLength; ++i)
+        for (unsigned i = 1; i < commonLength; ++i)
         {
-            // Hack to make head disappear when dead
-            const bool isHead = i == 0;
-            float size = 1.0f;
-            if (isHead && deathAnimation_)
-                size = ea::max(0.0f, 1.0f - blendFactor * renderSettings_.deathCollapseSpeed_);
-            else if (isHead && gameOver_)
-                size = 0.0f;
-
-            const Vector4 previousPosition = IndexToPosition(previousSnake_[i]);
-            const Vector4 currentPosition = IndexToPosition(snake_[i]);
-            if (size > M_EPSILON)
-            {
-                tesseract.position_ = Lerp(previousPosition, currentPosition, snakeMovementFactor);
-                tesseract.size_ = size * Vector4::ONE;
-                scene.wireframeTesseracts_.push_back(tesseract);
-            }
+            const Vector4 previousPosition = IndexToPosition(previousSnake_[i].position_);
+            const Vector4 currentPosition = IndexToPosition(snake_[i].position_);
+            tesseract.position_ = Lerp(previousPosition, currentPosition, snakeMovementFactor);
+            tesseract.size_ = Vector4::ONE;
+            scene.wireframeTesseracts_.push_back(tesseract);
         }
         for (unsigned i = commonLength; i < newLength; ++i)
         {
-            tesseract.position_ = IndexToPosition(snake_[i]);
+            tesseract.position_ = IndexToPosition(snake_[i].position_);
             tesseract.size_ = Vector4::ONE * snakeMovementFactor;
             scene.wireframeTesseracts_.push_back(tesseract);
         }
@@ -472,7 +535,7 @@ private:
         const Vector4 zAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 0.0f, 1.0f, 0.0f);
         const Vector4 wAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 0.0f, 0.0f, 1.0f);
 
-        const float wDelta = wAxis.DotProduct(IndexToPosition(targetPosition_) - IndexToPosition(snake_.front()));
+        const float wDelta = wAxis.DotProduct(IndexToPosition(targetPosition_) - IndexToPosition(GetSnakeHead()));
         const ColorTriplet guidelineColor = wDelta < -M_LARGE_EPSILON
             ? renderSettings_.redGuidelineColor_
             : wDelta > M_LARGE_EPSILON
@@ -542,7 +605,7 @@ private:
         const Vector4 zAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 0.0f, 1.0f, 0.0f);
         const Vector4 wAxis = viewToWorldSpaceTransform.rotation_ * Vector4(0.0f, 0.0f, 0.0f, 1.0f);
 
-        const float wDelta = wAxis.DotProduct(IndexToPosition(targetPosition_) - IndexToPosition(snake_.front()));
+        const float wDelta = wAxis.DotProduct(IndexToPosition(targetPosition_) - IndexToPosition(GetSnakeHead()));
         const ColorTriplet guidelineColor = wDelta < -M_LARGE_EPSILON
             ? renderSettings_.redGuidelineColor_
             : wDelta > M_LARGE_EPSILON
@@ -575,7 +638,7 @@ private:
         }
 
         // Always remove head
-        const Vector4 headViewSpacePosition = worldToViewSpaceTransform * IndexToPosition(snake_.front());
+        const Vector4 headViewSpacePosition = worldToViewSpaceTransform * IndexToPosition(GetSnakeHead());
         const Vector3 headGuidelineElement = VectorRound(static_cast<Vector3>(headViewSpacePosition));
         guideline.erase(headGuidelineElement);
 
@@ -616,16 +679,26 @@ private:
             return { nextTarget, true };
         }
 
-        return GetAvailablePosition(snake_);
+        return GetAvailablePosition();
     }
 
-    ea::pair<IntVector4, bool> GetAvailablePosition(const ea::vector<IntVector4>& blockedPositions) const
+    bool IsBlockedBySnake(const IntVector4& pos) const
+    {
+        for (const SnakeElement& element : snake_)
+        {
+            if (element.position_ == pos)
+                return true;
+        }
+        return false;
+    };
+
+    ea::pair<IntVector4, bool> GetAvailablePosition() const
     {
         static const int maxRetry = 10;
         for (int i = 0; i < maxRetry; ++i)
         {
             const IntVector4 position = RandomIntVector4(size_);
-            if (!blockedPositions.contains(position))
+            if (!IsBlockedBySnake(position))
                 return { position, true };
         }
 
@@ -638,7 +711,7 @@ private:
                     for (int x = 0; x < size_; ++x)
                     {
                         const IntVector4 position{ x, y, z, w };
-                        if (!blockedPositions.contains(position))
+                        if (!IsBlockedBySnake(position))
                             return { position, true };
                     }
                 }
@@ -663,8 +736,8 @@ private:
     bool enableRolls_{ true };
     bool exactGuidelines_{ false };
     unsigned pendingGrowth_{};
-    ea::vector<IntVector4> snake_;
-    ea::vector<IntVector4> previousSnake_;
+    ea::vector<SnakeElement> snake_;
+    ea::vector<SnakeElement> previousSnake_;
 
     ea::queue<IntVector4> targetQueue_;
     IntVector4 targetPosition_{};

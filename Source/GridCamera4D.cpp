@@ -19,10 +19,14 @@ void GridCamera4D::Step(const RotationDelta4D& delta, bool move)
 {
     rotationDelta_ = delta;
 
-    // TODO: Round matrix to integers
     previousRotation_ = currentRotation_;
     currentRotation_ = currentRotation_ * rotationDelta_.AsMatrix(1.0f);
     currentDirection_ = GetCurrentDirection();
+
+    // Snap to axises to avoid precision loss
+    float* data = &currentRotation_.rotation_.m00_;
+    for (int i = 0; i < 16; ++i)
+        data[i] = Round(data[i]);
 
     previousPosition_ = currentPosition_;
     if (move)
