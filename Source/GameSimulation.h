@@ -44,6 +44,7 @@ struct AnimationSettings
 
 struct RenderSettings
 {
+    float snakeThickness_{ 0.8f };
     float targetRotationSpeed1_{ 0.25f };
     float targetRotationSpeed2_{ 0.15f };
 
@@ -52,6 +53,12 @@ struct RenderSettings
     float deathShakeSaturation_{ 8.0f };
     float deathCollapseSpeed_{ 3.0f };
 
+    ColorTriplet headColor_{
+        { 1.0f, 1.0f, 0.4f, 1.0f },
+    };
+    ColorTriplet secondaryHeadColor_{
+        { 0.7f, 0.7f, 0.2f, 1.0f },
+    };
     ColorTriplet snakeColor_{
         { 1.0f, 1.0f, 1.0f, 1.0f },
         { 1.0f, 0.0f, 0.0f, 1.0f },
@@ -62,7 +69,7 @@ struct RenderSettings
         { 0.7f, 0.0f, 0.0f, 1.0f },
         { 0.0f, 0.0f, 0.7f, 1.0f }
     };
-    float snakeThickness_{ 0.025f };
+    float snakeFrameThickness_{ 0.025f };
 
     ColorTriplet targetColor_{
         { 0.0f, 1.0f, 0.0f, 1.0f },
@@ -125,6 +132,15 @@ struct SnakeElement
     IntVector4 position_;
     CubeFrame beginFrame_;
     IntVector4 beginFrameOffset_;
+
+    CubeFrame GetBeginFrameInWorldSpace(float thickness) const
+    {
+        const Vector4 position = IndexToPosition(position_);
+        CubeFrame newFrame;
+        for (unsigned i = 0; i < 8; ++i)
+            newFrame[i] = beginFrame_[i] * thickness * 0.5f + IntVectorToVector4(beginFrameOffset_) * 0.5f + position;
+        return newFrame;
+    }
 };
 
 class GameSimulation
@@ -411,9 +427,9 @@ private:
             Tesseract tesseract;
             tesseract.position_ = Lerp(previousPosition, currentPosition, snakeMovementFactor);
             tesseract.size_ = size * Vector4::ONE;
-            tesseract.color_ = renderSettings_.snakeColor_;
-            tesseract.secondaryColor_ = renderSettings_.secondarySnakeColor_;
-            tesseract.thickness_ = renderSettings_.snakeThickness_;
+            tesseract.color_ = renderSettings_.headColor_;
+            tesseract.secondaryColor_ = renderSettings_.secondaryHeadColor_;
+            tesseract.thickness_ = renderSettings_.snakeFrameThickness_;
 
             scene.wireframeTesseracts_.push_back(tesseract);
         }
@@ -421,10 +437,10 @@ private:
 
     void RenderSnakeTail(Scene4D& scene, float blendFactor) const
     {
-        Tesseract tesseract;
+        CustomTesseract tesseract;
         tesseract.color_ = renderSettings_.snakeColor_;
         tesseract.secondaryColor_ = renderSettings_.secondarySnakeColor_;
-        tesseract.thickness_ = renderSettings_.snakeThickness_;
+        tesseract.thickness_ = renderSettings_.snakeFrameThickness_;
 
         const float snakeMovementFactor = Clamp(blendFactor * animationSettings_.snakeMovementSpeed_, 0.0f, 1.0f);
 
@@ -433,17 +449,30 @@ private:
         const unsigned commonLength = ea::min(oldLength, newLength);
         for (unsigned i = 1; i < commonLength; ++i)
         {
-            const Vector4 previousPosition = IndexToPosition(previousSnake_[i].position_);
-            const Vector4 currentPosition = IndexToPosition(snake_[i].position_);
-            tesseract.position_ = Lerp(previousPosition, currentPosition, snakeMovementFactor);
-            tesseract.size_ = Vector4::ONE;
-            scene.wireframeTesseracts_.push_back(tesseract);
+            const CubeFrame previousEndFrame = GetBeginFrame(previousSnake_[i - 1]);
+            const CubeFrame currentEndFrame = GetBeginFrame(snake_[i - 1]);
+            const CubeFrame previousBeginFrame = GetBeginFrame(previousSnake_[i]);
+            const CubeFrame currentBeginFrame = GetBeginFrame(snake_[i]);
+            for (unsigned j = 0; j < 8; ++j)
+            {
+                tesseract.positions_[j] = Lerp(previousBeginFrame[j], currentBeginFrame[j], snakeMovementFactor);
+                tesseract.positions_[j + 8] = Lerp(previousEndFrame[j], currentEndFrame[j], snakeMovementFactor);
+            }
+            scene.customTesseracts_.push_back(tesseract);
         }
-        for (unsigned i = commonLength; i < newLength; ++i)
+
+        // Animate growth
+        if (commonLength < newLength)
         {
-            tesseract.position_ = IndexToPosition(snake_[i].position_);
-            tesseract.size_ = Vector4::ONE * snakeMovementFactor;
-            scene.wireframeTesseracts_.push_back(tesseract);
+            const CubeFrame previousEndFrame = GetBeginFrame(previousSnake_[commonLength - 1]);
+            const CubeFrame currentEndFrame = GetBeginFrame(snake_[commonLength - 1]);
+            const CubeFrame beginFrame = GetBeginFrame(snake_[commonLength]);
+            for (unsigned j = 0; j < 8; ++j)
+            {
+                tesseract.positions_[j] = beginFrame[j];
+                tesseract.positions_[j + 8] = Lerp(previousEndFrame[j], currentEndFrame[j], snakeMovementFactor);
+            }
+            scene.customTesseracts_.push_back(tesseract);
         }
     }
 
@@ -719,6 +748,11 @@ private:
         }
 
         return { {}, false };
+    }
+
+    CubeFrame GetBeginFrame(const SnakeElement& element) const
+    {
+        return element.GetBeginFrameInWorldSpace(renderSettings_.snakeThickness_);
     }
 
     int size_{};
