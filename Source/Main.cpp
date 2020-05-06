@@ -312,8 +312,12 @@ public:
         settings_.scoreToPeriod_ = { { 0, 0.4f } };
         settings_.rotationSlowdown_ = 1.35f;
         settings_.colorRotationSlowdown_ = 1.75f;
+        settings_.snakeMovementSpeed_ = 1.0f;
+        settings_.animationSettings_.snakeMovementSpeed_ = 1.0f;
         settings_.animationSettings_.cameraTranslationSpeed_ = 1.0f;
         settings_.animationSettings_.cameraRotationSpeed_ = 1.5f;
+        settings_.minSnakeMovementSpeed_ = 1.0f;
+        settings_.snakeMovementSpeedBasePeriod_ = 0.4f;
         sim_.SetAnimationSettings(settings_.animationSettings_);
         sim_.SetExactGuidelines(true);
     }
@@ -323,8 +327,6 @@ public:
 protected:
     void DoUpdate(float timeStep) override
     {
-        settings_.animationSettings_.snakeMovementSpeed_ = 1.0f;
-        sim_.SetAnimationSettings(settings_.animationSettings_);
     }
     void DoTick() override
     {
