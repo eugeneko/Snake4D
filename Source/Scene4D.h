@@ -68,7 +68,7 @@ SimpleVertex ProjectVertex4DTo3D(const Vector4& position,
 struct Scene4D
 {
     float hyperColorOffset_{ 0.5f };
-    float hyperPositionOffset_{ 0.05f };
+    float hyperPositionOffset_{ 20.0f };
     Vector3 focusPositionViewSpace_;
     Vector3 cameraOffset_;
 

@@ -8,7 +8,7 @@ SimpleVertex ProjectVertex4DTo3D(const Vector4& position,
     const ColorTriplet& color, float hyperColorOffset)
 {
     const Vector3 position3D = static_cast<Vector3>(position);
-    const float positionScaleFactor = std::exp(position.w_ * hyperPositionOffset);
+    const float positionScaleFactor = hyperPositionOffset / ea::max(0.5f, position.w_ + hyperPositionOffset);
     const Vector3 scaledPosition3D = focusPositionViewSpace + (position3D - focusPositionViewSpace) * positionScaleFactor;
 
     const float colorLerpFactor = 1.0f / (1.0f + std::exp(-hyperColorOffset * position.w_));
