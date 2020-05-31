@@ -4,74 +4,83 @@ Play in Web [here](https://eugeneko.github.io/Snake4D/Snake4D.html)
 
 ## Introduction
 
-**Snake4D** is classic snake game in mathematically correct 4D world.
-This is not really a game to be played by a living person.
-Treat it as proof-of-the-concept for 4D gameplay and rendering.
+**Snake4D** is classic snake game in the mathematically correct 4D world.
+It is not really a game to be played by a living person,
+it's more like proof-of-the-concept for 4D gameplay and rendering.
 
 Important notes:
 
 - When the game is started, it starts playing AI demo automatically.
-Go to menu to choose game mode and start playing.
+Go to menu to try playing the game itself.
 
 - I strongly recommend to have at least basic understanding of 4D geometry.
-There are a lot of videos and articles written by people who are better at explaining than me,
+There are a lot of videos and articles written by people who are better at explaining things than me,
 so I skip common knowledge in this document.
 
 - Yes, the game becomes messy when the snake grows.
 Nothing to do here, 4D just have insanely big information density after projecting on 2D screen.
-There may be up to 14641 (!) snake segments in the world. There's just no way they can all nicely fit on the screen.
+There may be up to 14640 (!) snake tail segments in the world.
+There's just no way one can nicely fit this much geometry on the screen.
 
-- I'll repeat again, just in case. This game is not really designed to be playable by a human being.
-I cannot play it beyond certain snake length. You won't be able too. Guess that's why 4D games don't happen that often.
+- This game is not really designed to be playable by a human being.
+I cannot play it beyond certain snake length. You won't be able too.
+I guess that's why 4D games aren't made that often.
 
 ## Graphics
 
 4D graphics mostly follows the same rules as 3D.
-There are 4 world axes in 4D:
+There are 4 orthogonal axes in 4D:
 
 - **X** and **Y** are the standard 2D axes of the screen. **X** goes left to right and **Y** goes bottom to top.
 
 - **Z** is the standard 3rd axis that goes "forward" from the eyes of the spectator into the screen.
 
-- **W** is 4th axis that doesn't have specific direction in 3D world.
+- **W** is the 4th axis that doesn't have specific direction in 3D world.
 
-When **3D** world is projected on **2D** surface (e.g. display), one axis is folded using perspective projection.
-Let's call this axis **Z**. As the object moves along **Z** axis away from the camera,
+Before I explain 4D-to-3D projection, I want to say a few words about classic 3D-to-2D perspective projection.
+
+When **3D** world is projected on **2D** surface (e.g. display), **Z** axis is folded by perspective projection.
+As the object moves along **Z** axis away from the camera,
 its **2D** projection becomes smaller and smaller, approaching the vanishing point.
 The vanishing point is **2D** position on the screen, usually in the center.
 
-**Figure 1:** the chain of parallel square frames along **Z** axis from different view points.
+**Figure 1:** the set of parallel square frames along **Z** axis from different points of view.
+Gray dot is the vanishing point at **Z** coordinate approaching infinity.
 
 ![](Docs/Project-3D-to-2D-eye.svg)
 
 ![](Docs/Project-3D-to-2D-side.svg)
 
 In order to project from 4D to 3D, **W** axis is also folded using similar algorithm.
-The vanishing point is **3D** now, and as the object moves along **W** axis **W** away from the camera,
-its **3D** projection also becomes smaller and smaller, approaching **3D** vanishing point.
+The vanishing point is in **3D** now, and as the object moves along **W** axis away from the camera,
+its **3D** projection also becomes smaller and smaller, approaching the vanishing point in **3D**.
 
 The only difference is that 4D-to-3D projection works in both directions.
 While 3D-to-2D projection usually makes the objects behind the camera invisible, it's not the case for 4D-to-3D projection.
 There's no way to reasonably define "behind" for **W** axis.
 
 Therefore, when the **4D** object moves away from the camera in one (arbitrarily picked) direction along **W** axis,
-it becomes smaller and approaches **3D** vanishing point.
-When the **4D** object moves away from the camera in the opposite direction along **W** axis,
-it becomes bigger and runs away from **3D** vanishing point.
+it becomes smaller and approaches the vanishing point in **3D**.
 
-**Figure 2:** the chain of parallel square frames along **W** axis from different view points.
+When the **4D** object moves away from the camera in the opposite direction along **W** axis,
+it becomes bigger and runs away from the vanishing point in **3D**.
+
+**Figure 2:** the set of parallel square frames along **W** axis from different points of view.
+Gray dot is the vanishing point at **W** coordinate approaching infinity.
 
 ![](Docs/Project-4D-to-3D-eye.svg)
 
 ![](Docs/Project-4D-to-3D-side.svg)
 
-In the end, 4D world projected two times.
-First, custom 4D-to-3D projection with **3D** vanishing point.
-Second, commonly used 3D-to-2D perspective projection.
+In the end, 4D world is projected two times.
+First, custom 4D-to-3D projection that folds **W** axis.
+Second, commonly used 3D-to-2D perspective projection that folds **Z** axis too.
 
-In order to make position along **W** axis more distinguishable, objects are colored according to their position.
+In order to make different positions along **W** axis more distinguishable,
+objects are colored differently according to their positions.
+
 Objects with the same **W** coordinate as the camera have default colors (e.g. white for snake body, green for food).
-Objects with positive or negative relative offset in **W** coordinate have **blue** or **red** tint in their color.
+Objects with positive or negative offset in **W** coordinate have **blue** or **red** tint in their color.
 
 The directions along **W** axis are named **red** and **blue** according to their color tint.
 
@@ -87,14 +96,14 @@ so their real position may be significantly different from their apparent projec
 
 ## Movement
 
-Movement in **3D** and in **4D** have the same nature, too.
+Movement has the same nature in **3D** and in **4D**.
 
 When camera rotates in **3D**, two axes trade places and the third axis stays fixed.
 
-When camera rotates in **4D**, two axes trade places as well. Two remaining axes stay unchanged.
+When camera rotates in **4D**, two axes trade places and two remaining axes stay unchanged.
 
-W-A-S-D controls change direction of the snake movement in **3D**, ignoring 4th dimension.
-Q-E-Space controls change how 4th dimension is projected into 3D space.
+W/A/S/D control snake movement in **3D**, ignoring 4th dimension.
+Q/E/Space control how 4th dimension is projected into 3D space.
 
 - **W** and **S** rotate snake **up** and **down**.
 Both **X** and **W** axes stay the same, **Y** and **Z** axes trade places.
@@ -130,21 +139,23 @@ There are three game modes:
 
 Gameplay basics:
 
+- **The world** is the hypercube with 11x11x11x11 hypercube cells inside.
+
+- **The wall** is the boundary of the world covered with gray quads.
+Only walls of the current 3D slice of 4D space are displayed.
+
 - **Snake tail** are red-to-white-to-blue hypercube frames connected to each other and to the head.
 
 - **Snake head** is the yellow hypercube frame in the center of the screen.
 If snake head hits the wall, snake dies.
 If snake head hits its tail, snake dies.
 
-- **Snake food** aka **target** is the green rotating hypercube frame. When food is eaten, snake grows by three segments.
-
-- **The world** is hypercube with 11x11x11x11 hypercube cells inside.
-
-- **The wall** is the boundary of the world covered with gray quads. Only walls of the current **3D** slice are displayed.
+- **Snake food** aka **target** is the green rotating hypercube frame.
+When the food is eaten, snake grows by three segments.
 
 - Unless snake performs **4D** rotation using Q, E or Space,
 it cannot hit tail segments that have **red** or **blue** offset.
-Segments with different coordinate along **W** axis may overlap
+Segments with different coordinate along **W** axis may visually overlap
 with each other or with the head due to 4D-to-3D projection.
 
 - Beware! Re-projection due to **4D** rotation shifts the walls.
@@ -154,11 +165,11 @@ with each other or with the head due to 4D-to-3D projection.
 In normal game, the guidelines show approximate path to the target and may go through the snake tail.
 Blocked guideline elements are smaller than normal.
 In tutorial game, guidelines never go through the snake tail,
-although they may visually intersect it if the path was traced through another layer of 4th dimension.
+although they may visually intersect it if the path was traced through another 3D slice of 4D world.
 
 - Guidelines are not affected by 4D-to-3D perspective deformation and always match 3D grid.
 
-- Guideline color shows whether the target is on the same **W** layer (yellow guideline), has **red** offset (orange guideline) or has **blue** offset (blue guideline).
+- Guideline color shows whether the target is in the same 3D slice (yellow guideline), has **red** offset (orange guideline) or has **blue** offset (blue guideline).
 
 Navigation is 4D is hard. Some tips:
 
