@@ -168,7 +168,7 @@ although they may visually intersect it if the path was traced through another 3
 
 - Guidelines are not affected by 4D-to-3D perspective deformation and always match 3D grid.
 
-- Guideline color shows whether the target is in the same 3D slice (yellow guideline), has **red** offset (orange guideline) or has **blue** offset (blue guideline).
+- Guideline color shows whether the target is in the same 3D slice (green guideline), has **red** offset (orange guideline) or has **blue** offset (blue guideline).
 
 Navigation is 4D is hard. Some tips:
 
