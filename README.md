@@ -5,8 +5,7 @@ Play in Web [here](https://eugeneko.github.io/Snake4D/Snake4D.html)
 ## Introduction
 
 **Snake4D** is classic snake game in the mathematically correct 4D world.
-It is not really a game to be played by a living person,
-it's more like proof-of-the-concept for 4D gameplay and rendering.
+This app is closer to proof-of-the-concept for 4D gameplay, rendering and animation than to actual playable game.
 
 Important notes:
 
@@ -19,7 +18,7 @@ so I skip common knowledge in this document.
 
 - Yes, the game becomes messy when the snake grows.
 Nothing to do here, 4D just have insanely big information density after projecting on 2D screen.
-There may be up to 14640 (!) snake tail segments in the world.
+There may be up to 14640 (!) snake tail segments in the game world.
 There's just no way one can nicely fit this much geometry on the screen.
 
 - This game is not really designed to be playable by a human being.
