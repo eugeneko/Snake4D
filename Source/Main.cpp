@@ -617,9 +617,9 @@ public:
 
     void Initialize(RenderCallback renderCallback)
     {
-        auto cache = context_->GetCache();
-        auto input = context_->GetInput();
-        auto renderer = context_->GetRenderer();
+        auto cache = context_->GetSubsystem<ResourceCache>();
+        auto input = context_->GetSubsystem<Input>();
+        auto renderer = context_->GetSubsystem<Renderer>();
 
         scene_ = MakeShared<Scene>(context_);
         scene_->CreateComponent<Octree>();
