@@ -1,0 +1,42 @@
+body
+{
+    font-family: "Anonymous Pro";
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24pt;
+    overflow: hidden;
+    width: auto;
+    height: auto;
+    margin: 0;
+}
+
+#window
+{
+    background: #212b86;
+    border: 3dp #226397;
+    display: block;
+    padding: 8dp;
+}
+
+button
+{
+    background: #283be9;
+    border: 3dp #3470f0;
+    display: block;
+    text-align: center;
+    margin: 16dp;
+    padding: 8dp;
+    tab-index: auto;
+}
+
+button:hover
+{
+    background: #be6c00;
+    border: 3dp #ffca38;
+}
+
+button:active
+{
+    background: #ee8700;
+    border: 3dp #ffca38;
+}

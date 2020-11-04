@@ -2,6 +2,7 @@
 #include "GameSimulation.h"
 
 #include <Urho3D/Urho3DAll.h>
+#include <RmlUi/Core/DataModel.h>
 
 using namespace Urho3D;
 
@@ -117,8 +118,6 @@ public:
     {
         sim_.Reset(standardTargets);
     }
-
-    virtual bool IsResumable() { return true; }
 
     virtual bool IsTutorialHintVisible() { return false; };
 
@@ -342,8 +341,6 @@ class FirstDemoGameSession : public DemoGameSession
 public:
     FirstDemoGameSession(Context* context) : DemoGameSession(context) {}
 
-    bool IsResumable() override { return false; }
-
     ea::string GetScoreString() override { return paused_ ? "" : "Demo game played by AI"; }
 
     float GetArtificialSlowdown() override { return Lerp(1.0f, 5.0f, slowdown_); }
@@ -358,12 +355,52 @@ protected:
     float slowdown_{ 1.0f };
 };
 
-class GameUI : public Object
+class GameUI : public RmlUIComponent
 {
-    URHO3D_OBJECT(GameUI, Object);
+    URHO3D_OBJECT(GameUI, RmlUIComponent);
 
 public:
-    GameUI(Context* context) : Object(context) {}
+    template <class T> static Rml::DataEventFunc WrapCallback(T callback)
+    {
+        return [=](Rml::DataModelHandle modelHandle, Rml::Event& ev, const Rml::VariantList& arguments) { callback(); };
+    }
+
+    GameUI(Context* context)
+        : RmlUIComponent(context)
+    {
+        RmlUI* ui = GetSubsystem<RmlUI>();
+        Rml::DataModelConstructor constructor = ui->GetRmlContext()->CreateDataModel("model");
+        constructor.Bind("show_menu", &showMenu_);
+        constructor.Bind("show_tutorial", &showTutorial_);
+        constructor.Bind("show_exit", &showExit_);
+
+#ifdef __EMSCRIPTEN__
+        showExit_ = false;
+#endif
+
+        const auto resume = [this] { TogglePaused(); };
+        const auto newGame = [this] { StartGame(MakeShared<ClassicGameSession>(context_)); };
+        const auto tutorial = [this] { StartGame(MakeShared<TutorialGameSession>(context_)); };
+        const auto demo = [this] { StartGame(MakeShared<DemoGameSession>(context_)); };
+        const auto exit = [this] { SendEvent(E_EXITREQUESTED); };
+
+        constructor.BindEventCallback("resume", WrapCallback(resume));
+        constructor.BindEventCallback("new_game", WrapCallback(newGame));
+        constructor.BindEventCallback("tutorial", WrapCallback(tutorial));
+        constructor.BindEventCallback("demo", WrapCallback(demo));
+        constructor.BindEventCallback("exit", WrapCallback(exit));
+
+        model_ = constructor.GetModelHandle();
+
+        SetResource("UI/GameUI.rml");
+        SetOpen(true);
+    }
+
+    ~GameUI() override
+    {
+        RmlUI* ui = GetSubsystem<RmlUI>();
+        ui->GetRmlContext()->RemoveDataModel("model");
+    }
 
     GameSession* GetCurrentSession() const { return currentSession_; }
 
@@ -374,12 +411,11 @@ public:
             StartGame(session);
     }
 
-    void Update()
+    void Update(float timeStep) override
     {
-        resumeButton_->SetEnabled(currentSession_ && currentSession_->IsResumable());
-
         const bool showTutorialHint = currentSession_ && currentSession_->IsTutorialHintVisible();
         tutorialHintWindow_->SetVisible(showTutorialHint);
+        showTutorial_ = showTutorialHint;
 
         const ea::string scoreString = currentSession_ ? currentSession_->GetScoreString() : "";
         const bool showScoreLabel = !scoreString.empty();
@@ -396,31 +432,33 @@ public:
             tutorialHintText_->SetText(currentSession_->GetTutorialHint());
             tutorialHintText_->SetColor(color);
         }
+
+        model_.DirtyVariable("show_menu");
+        model_.DirtyVariable("show_tutorial");
+        model_.Update();
     }
 
     void TogglePaused()
     {
-        if (state_ == State::Paused && currentSession_ && currentSession_->IsResumable())
+        if (showMenu_ && currentSession_)
         {
-            state_ = State::Running;
             currentSession_->SetPaused(false);
-            window_->SetVisible(false);
+            showMenu_ = false;
         }
-        else if (state_ == State::Running)
+        else if (!showMenu_)
         {
-            state_ = State::Paused;
             currentSession_->SetPaused(true);
-            window_->SetVisible(true);
+            showMenu_ = true;
         }
     }
 
     void StartGame(SharedPtr<GameSession> session)
     {
-        state_ = State::Running;
         currentSession_ = session;
         currentSession_->SetPaused(false);
-        window_->SetVisible(false);
+        showMenu_ = false;
         tutorialHintWindow_->SetVisible(currentSession_->IsTutorialHintVisible());
+        showTutorial_ = currentSession_->IsTutorialHintVisible();
     }
 
     static void RegisterObject(Context* context)
@@ -429,7 +467,6 @@ public:
     }
 
 private:
-    enum class State { Paused, Running };
     void CreateUI()
     {
         auto ui = context_->GetSubsystem<UI>();
@@ -440,29 +477,7 @@ private:
         auto style = cache->GetResource<XMLFile>("UI/DefaultStyle.xml");
         uiRoot->SetDefaultStyle(style);
 
-        // Create the Window and add it to the UI's root node
-        window_ = uiRoot->CreateChild<Window>("Window");
-
-        // Set Window size and layout settings
-        window_->SetLayout(LM_VERTICAL, padding_, { padding_, padding_, padding_, padding_ });
-        window_->SetAlignment(HA_CENTER, VA_CENTER);
-        window_->SetStyleAuto();
-
-        // Create buttons
-        resumeButton_ = CreateButton("Resume", window_);
-        Button* newGameButton = CreateButton("New Game!", window_);
-        Button* tutorialButton = CreateButton("Tutorial", window_);
-        Button* demoButton = CreateButton("Demo", window_);
-        Button* exitButton = CreateButton("Exit", window_);
-
         // Create events
-        SubscribeToEvent(E_SCREENMODE,
-            [ui](StringHash eventType, VariantMap& eventData)
-        {
-            // Avoid fractional UI rescale
-            ui->SetScale(ea::max(1.0f, Round(ui->GetScale())));
-        });
-
         SubscribeToEvent(E_KEYDOWN,
             [this](StringHash eventType, VariantMap& eventData)
         {
@@ -472,40 +487,6 @@ private:
                 TogglePaused();
             }
         });
-
-        SubscribeToEvent(resumeButton_, E_RELEASED,
-            [this](StringHash eventType, VariantMap& eventData)
-        {
-            TogglePaused();
-        });
-
-        SubscribeToEvent(newGameButton, E_RELEASED,
-            [this](StringHash eventType, VariantMap& eventData)
-        {
-            StartGame(MakeShared<ClassicGameSession>(context_));
-        });
-
-        SubscribeToEvent(tutorialButton, E_RELEASED,
-            [this](StringHash eventType, VariantMap& eventData)
-        {
-            StartGame(MakeShared<TutorialGameSession>(context_));
-        });
-
-        SubscribeToEvent(demoButton, E_RELEASED,
-            [this](StringHash eventType, VariantMap& eventData)
-        {
-            StartGame(MakeShared<DemoGameSession>(context_));
-        });
-
-        SubscribeToEvent(exitButton, E_RELEASED,
-            [this](StringHash eventType, VariantMap& eventData)
-        {
-            SendEvent(E_EXITREQUESTED);
-        });
-
-#ifdef __EMSCRIPTEN__
-        exitButton->SetEnabled(false);
-#endif
 
         // Create score label
         {
@@ -517,30 +498,6 @@ private:
             scoreLabelText_ = scoreLabelWindow_->CreateChild<Text>("Score Label");
             scoreLabelText_->SetStyleAuto();
             scoreLabelText_->SetFontSize(menuFontSize_);
-        }
-
-        // Create menu hint
-        {
-            auto menuHintWindow = uiRoot->CreateChild<Window>("Menu Hint Label Window");;
-            menuHintWindow->SetLayout(LM_VERTICAL, padding_, { padding_, padding_, padding_, padding_ });
-            menuHintWindow->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
-            menuHintWindow->SetStyleAuto();
-
-            auto menuHintText = menuHintWindow->CreateChild<Text>("Menu Hint Label");
-            menuHintText->SetStyleAuto();
-            menuHintText->SetFontSize(menuFontSize_);
-            menuHintText->SetText("Press [Tab] to Pause & Open Menu");
-
-            IntVector2 hintSize;
-            hintSize.x_ = menuHintText->GetMinWidth() + padding_ * 2;
-            hintSize.y_ = menuHintText->GetMinHeight() + padding_ * 2;
-
-            menuHintWindow->SetMinAnchor(1.0f, 0.0f);
-            menuHintWindow->SetMaxAnchor(1.0f, 0.0f);
-            menuHintWindow->SetPivot(0.0f, 0.0f);
-            menuHintWindow->SetEnableAnchor(true);
-            menuHintWindow->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
-
         }
 
         // Create hint box
@@ -570,40 +527,22 @@ private:
         }
     }
 
-    Button* CreateButton(const ea::string& text, UIElement* parent) const
-    {
-        auto button = parent->CreateChild<Button>(text);
-        button->SetLayout(LM_HORIZONTAL, padding_, { padding_, padding_, padding_, padding_ });
-        button->SetHorizontalAlignment(HA_CENTER);
-        button->SetStyleAuto();
-
-        auto buttonText = button->CreateChild<Text>(text + " Text");
-        buttonText->SetAlignment(HA_CENTER, VA_CENTER);
-        buttonText->SetText(text);
-        buttonText->SetStyleAuto();
-        buttonText->SetFontSize(menuFontSize_);
-
-        button->SetFixedWidth(CeilToInt(buttonText->GetMinWidth() + 2 * padding_));
-        button->SetFixedHeight(buttonText->GetMinHeight() + padding_);
-
-        return button;
-    }
+    Rml::DataModelHandle model_;
 
     const int padding_{ 18 };
     const float menuFontSize_{ 24 };
 
     SharedPtr<GameSession> currentSession_;
 
-    State state_{};
-    Window* window_{};
-
-    Button* resumeButton_{};
-
     Window* tutorialHintWindow_{};
     Text* tutorialHintText_{};
 
     Window* scoreLabelWindow_{};
     Text* scoreLabelText_{};
+
+    bool showMenu_{ true };
+    bool showTutorial_{};
+    bool showExit_{ true };
 };
 
 using RenderCallback = std::function<bool(float timeStep, Scene4D& scene4D)>;
@@ -615,6 +554,8 @@ class GameRenderer : public Object
 public:
     GameRenderer(Context* context) : Object(context) {}
 
+    GameUI* GetUI() { return scene_->GetComponent<GameUI>(); }
+
     void Initialize(RenderCallback renderCallback)
     {
         auto cache = context_->GetSubsystem<ResourceCache>();
@@ -624,6 +565,8 @@ public:
         scene_ = MakeShared<Scene>(context_);
         scene_->CreateComponent<Octree>();
         scene_->CreateComponent<DebugRenderer>();
+        GameUI* gameUI = scene_->CreateComponent<GameUI>();
+        gameUI->Initialize(MakeShared<FirstDemoGameSession>(context_));
 
         auto solidMaterial = MakeShared<Material>(context_);
         solidMaterial->SetCullMode(CULL_NONE);
@@ -710,7 +653,6 @@ public:
     void Start() override;
 
 private:
-    SharedPtr<GameUI> gameUI_;
     SharedPtr<GameRenderer> gameRenderer_;
 };
 
@@ -726,28 +668,31 @@ void MainApplication::Setup()
 
 void MainApplication::Start()
 {
+    context_->RegisterFactory<GameUI>();
+
     auto input = GetSubsystem<Input>();
     auto ui = GetSubsystem<UI>();
+    auto rml = GetSubsystem<RmlUI>();
     auto renderer = GetSubsystem<Renderer>();
     auto cache = GetSubsystem<ResourceCache>();
 
+    rml->LoadFont("Fonts/Anonymous Pro.ttf", false);
+
     auto renderCallback = [=](float timeStep, Scene4D& scene4D)
     {
-        GameSession* gameSession = gameUI_->GetCurrentSession();
+        GameUI* gameUI = gameRenderer_->GetUI();
+        GameSession* gameSession = gameUI->GetCurrentSession();
         if (gameSession)
         {
             gameSession->Update(timeStep);
             gameSession->Render(scene4D);
         }
 
-        gameUI_->Update();
+        gameUI->Update(timeStep);
         return !!gameSession;
     };
 
     SetRandomSeed(static_cast<unsigned>(time(0)));
-
-    gameUI_ = MakeShared<GameUI>(context_);
-    gameUI_->Initialize(MakeShared<FirstDemoGameSession>(context_));
 
     gameRenderer_ = MakeShared<GameRenderer>(context_);
     gameRenderer_->Initialize(renderCallback);
