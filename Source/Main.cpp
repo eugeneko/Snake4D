@@ -462,14 +462,6 @@ public:
 private:
     void CreateUI()
     {
-        auto ui = context_->GetSubsystem<UI>();
-        UIElement* uiRoot = ui->GetRoot();
-
-        // Load style
-        auto cache = GetSubsystem<ResourceCache>();
-        auto style = cache->GetResource<XMLFile>("UI/DefaultStyle.xml");
-        uiRoot->SetDefaultStyle(style);
-
         // Create events
         SubscribeToEvent(E_KEYDOWN,
             [this](StringHash eventType, VariantMap& eventData)
@@ -624,7 +616,6 @@ void MainApplication::Start()
     context_->RegisterFactory<GameUI>();
 
     auto input = GetSubsystem<Input>();
-    auto ui = GetSubsystem<UI>();
     auto rml = GetSubsystem<RmlUI>();
     auto renderer = GetSubsystem<Renderer>();
     auto cache = GetSubsystem<ResourceCache>();
