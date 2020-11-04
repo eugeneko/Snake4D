@@ -4,18 +4,19 @@
         <link type="text/rcss" href="default.rcss"/>
     </head>
 
-    <body data-model="model" style="width:100%; height: 100%; margin:0; position:absolute; left: 0; top: 0">
-        <div id="window" data-if="show_menu" style="width:200dp; margin:30% auto auto; position:absolute">
+    <body data-model="model" style="width:100%; height:100%; margin:0; position:absolute; left:0; top:0;">
+        <div id="window" data-if="show_menu" style="width:200dp; margin:30% auto auto; position:absolute;">
             <div>
                 <button data-event-click="resume">Resume</button>
-                <button data-event-click="new_game">New Game</button>
-                <button data-event-click="tutorial">Tutorial</button>
+                <button data-event-click="new_game" data-if="has_keyboard">New Game</button>
+                <button data-event-click="tutorial" data-if="has_keyboard">Tutorial</button>
                 <button data-event-click="demo">Demo</button>
                 <button data-event-click="exit" data-if="show_exit">Exit</button>
             </div>
         </div>
-        <button data-event-click="resume" style="width:auto; position:absolute; right:0; top:0; margin:0">[Tab] Pause Menu</button>
-        <div id="window" style="width:200dp; margin:0; position:absolute; left: 0; top: 0">Score</div>
+        <button data-event-click="resume" style="width:auto; position:absolute; right:0; top:0; margin:0;">[Tab] Pause Menu</button>
+        <div id="transparent-window" data-if="show_score" style="width:auto; margin:0; position:absolute; left: 0; top: 0; white-space:pre;">{{score_text}}</div>
+        <div id="transparent-window" data-if="show_tutorial" style="width:150dp; height:80dp; margin:auto; white-space:pre; text-align:center;">{{tutorial_text}}</div>
     </body>
 
 </rml>

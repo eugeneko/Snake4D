@@ -13,7 +13,15 @@ body
 #window
 {
     background: #212b86;
-    border: 3dp #226397;
+    border: 3dp #226297;
+    display: block;
+    padding: 8dp;
+}
+
+#transparent-window
+{
+    background: #212b86b4;
+    border: 3dp #226297b4;
     display: block;
     padding: 8dp;
 }

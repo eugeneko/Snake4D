@@ -341,8 +341,6 @@ class FirstDemoGameSession : public DemoGameSession
 public:
     FirstDemoGameSession(Context* context) : DemoGameSession(context) {}
 
-    ea::string GetScoreString() override { return paused_ ? "" : "Demo game played by AI"; }
-
     float GetArtificialSlowdown() override { return Lerp(1.0f, 5.0f, slowdown_); }
 
 protected:
@@ -368,15 +366,21 @@ public:
     GameUI(Context* context)
         : RmlUIComponent(context)
     {
-        RmlUI* ui = GetSubsystem<RmlUI>();
-        Rml::DataModelConstructor constructor = ui->GetRmlContext()->CreateDataModel("model");
-        constructor.Bind("show_menu", &showMenu_);
-        constructor.Bind("show_tutorial", &showTutorial_);
-        constructor.Bind("show_exit", &showExit_);
-
+        auto input = context_->GetSubsystem<Input>();
+        hasKeyboard_ = input->IsScreenKeyboardVisible();
 #ifdef __EMSCRIPTEN__
         showExit_ = false;
 #endif
+
+        RmlUI* ui = GetSubsystem<RmlUI>();
+        Rml::DataModelConstructor constructor = ui->GetRmlContext()->CreateDataModel("model");
+        constructor.Bind("has_keyboard", &hasKeyboard_);
+        constructor.Bind("show_menu", &showMenu_);
+        constructor.Bind("show_tutorial", &showTutorial_);
+        constructor.Bind("show_exit", &showExit_);
+        constructor.Bind("show_score", &showScore_);
+        constructor.Bind("score_text", &scoreText_);
+        constructor.Bind("tutorial_text", &tutorialText_);
 
         const auto resume = [this] { TogglePaused(); };
         const auto newGame = [this] { StartGame(MakeShared<ClassicGameSession>(context_)); };
@@ -413,28 +417,18 @@ public:
 
     void Update(float timeStep) override
     {
-        const bool showTutorialHint = currentSession_ && currentSession_->IsTutorialHintVisible();
-        tutorialHintWindow_->SetVisible(showTutorialHint);
-        showTutorial_ = showTutorialHint;
+        showTutorial_ = currentSession_ && currentSession_->IsTutorialHintVisible();
+        tutorialText_ = currentSession_->GetTutorialHint();
+        //const Color color = currentSession_->GetTutorialHintColor();
 
-        const ea::string scoreString = currentSession_ ? currentSession_->GetScoreString() : "";
-        const bool showScoreLabel = !scoreString.empty();
-        scoreLabelWindow_->SetVisible(showScoreLabel);
-        if (showScoreLabel)
-        {
-            scoreLabelText_->SetText(scoreString);
-            scoreLabelWindow_->SetWidth(scoreLabelText_->GetMinWidth() + 2 * padding_);
-        }
-
-        if (showTutorialHint)
-        {
-            const Color color = currentSession_->GetTutorialHintColor();
-            tutorialHintText_->SetText(currentSession_->GetTutorialHint());
-            tutorialHintText_->SetColor(color);
-        }
+        scoreText_ = currentSession_ ? currentSession_->GetScoreString() : "";
+        showScore_ = !scoreText_.empty();
 
         model_.DirtyVariable("show_menu");
         model_.DirtyVariable("show_tutorial");
+        model_.DirtyVariable("show_score");
+        model_.DirtyVariable("score_text");
+        model_.DirtyVariable("tutorial_text");
         model_.Update();
     }
 
@@ -457,7 +451,6 @@ public:
         currentSession_ = session;
         currentSession_->SetPaused(false);
         showMenu_ = false;
-        tutorialHintWindow_->SetVisible(currentSession_->IsTutorialHintVisible());
         showTutorial_ = currentSession_->IsTutorialHintVisible();
     }
 
@@ -487,44 +480,6 @@ private:
                 TogglePaused();
             }
         });
-
-        // Create score label
-        {
-            scoreLabelWindow_ = uiRoot->CreateChild<Window>("Score Label Window");;
-            scoreLabelWindow_->SetLayout(LM_VERTICAL, padding_, { padding_, padding_, padding_, padding_ });
-            scoreLabelWindow_->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
-            scoreLabelWindow_->SetStyleAuto();
-
-            scoreLabelText_ = scoreLabelWindow_->CreateChild<Text>("Score Label");
-            scoreLabelText_->SetStyleAuto();
-            scoreLabelText_->SetFontSize(menuFontSize_);
-        }
-
-        // Create hint box
-        {
-            tutorialHintWindow_ = uiRoot->CreateChild<Window>("Tutorial Hint Window");
-            tutorialHintWindow_->SetLayout(LM_VERTICAL, padding_, { padding_, padding_, padding_, padding_ });
-            tutorialHintWindow_->SetStyleAuto();
-
-            tutorialHintText_ = tutorialHintWindow_->CreateChild<Text>("Tutorial Hint Text");
-            tutorialHintText_->SetAlignment(HA_CENTER, VA_CENTER);
-            tutorialHintText_->SetTextAlignment(HA_CENTER);
-            tutorialHintText_->SetText("X\nXXXXXXX");
-            tutorialHintText_->SetStyleAuto();
-            tutorialHintText_->SetFontSize(menuFontSize_);
-
-            IntVector2 hintSize;
-            hintSize.x_ = tutorialHintText_->GetMinWidth() + padding_ * 2;
-            hintSize.y_ = tutorialHintText_->GetMinHeight() + padding_ * 2;
-
-            tutorialHintWindow_->SetMinAnchor(0.5f, 0.45f);
-            tutorialHintWindow_->SetMaxAnchor(0.5f, 0.45f);
-            tutorialHintWindow_->SetPivot(0.5f, 0.5f);
-            tutorialHintWindow_->SetEnableAnchor(true);
-            tutorialHintWindow_->SetColor(Color(1.0f, 1.0f, 1.0f, 0.7f));
-
-            tutorialHintWindow_->SetVisible(false);
-        }
     }
 
     Rml::DataModelHandle model_;
@@ -534,15 +489,13 @@ private:
 
     SharedPtr<GameSession> currentSession_;
 
-    Window* tutorialHintWindow_{};
-    Text* tutorialHintText_{};
-
-    Window* scoreLabelWindow_{};
-    Text* scoreLabelText_{};
-
+    bool hasKeyboard_{};
     bool showMenu_{ true };
     bool showTutorial_{};
     bool showExit_{ true };
+    bool showScore_{};
+    ea::string scoreText_;
+    ea::string tutorialText_;
 };
 
 using RenderCallback = std::function<bool(float timeStep, Scene4D& scene4D)>;
