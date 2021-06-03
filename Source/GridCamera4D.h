@@ -59,7 +59,7 @@ public:
 
     bool IsRotating() const { return rotationDelta_.angle_ > M_EPSILON; }
 
-    bool IsColorRotating() const { return rotationDelta_.axis1_ == 3 || rotationDelta_.axis2_ == 3; }
+    bool IsColorRotating() const { return rotationDelta_.angle_ != 0.0f && (rotationDelta_.axis1_ == 3 || rotationDelta_.axis2_ == 3); }
 
 private:
     IntVector4 currentDirection_{};

@@ -15,6 +15,7 @@ set (URHO3D_URHO2D OFF CACHE BOOL "")
 set (URHO3D_SAMPLES OFF CACHE BOOL "")
 set (URHO3D_PROFILER OFF CACHE BOOL "")
 
+include (${CMAKE_SOURCE_DIR}/3rdParty/rbfx/cmake/Modules/UrhoCommon.cmake)
 add_subdirectory (${CMAKE_SOURCE_DIR}/3rdParty/rbfx)
 
 # Setup Snake4D

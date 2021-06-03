@@ -2,7 +2,7 @@
 #include "GameSimulation.h"
 
 #include <Urho3D/Urho3DAll.h>
-#include <RmlUi/Core/DataModel.h>
+#include <RmlUi/Core/DataModelHandle.h>
 
 using namespace Urho3D;
 
@@ -217,6 +217,7 @@ public:
     TutorialGameSession(Context* context)
         : ClassicGameSession(context)
     {
+        settings_.colorRotationSlowdown_ = 2.65f;
         sim_.Reset(tutorialTargets);
         sim_.SetExactGuidelines(true);
     }
@@ -310,7 +311,7 @@ public:
     {
         settings_.scoreToPeriod_ = { { 0, 0.4f } };
         settings_.rotationSlowdown_ = 1.35f;
-        settings_.colorRotationSlowdown_ = 1.75f;
+        settings_.colorRotationSlowdown_ = 3.95f;
         settings_.snakeMovementSpeed_ = 1.0f;
         settings_.animationSettings_.snakeMovementSpeed_ = 1.0f;
         settings_.animationSettings_.cameraTranslationSpeed_ = 1.0f;
@@ -343,14 +344,23 @@ public:
 
     float GetArtificialSlowdown() override { return Lerp(1.0f, 5.0f, slowdown_); }
 
+    bool IsTutorialHintVisible() { return promptTimeToLive_ > 0.0f; };
+
+    ea::string GetTutorialHint() override
+    {
+        return "Demo game\nby AI";
+    }
+
 protected:
     void DoUpdate(float timeStep) override
     {
         DemoGameSession::DoUpdate(timeStep);
         slowdown_ = ea::max(0.0f, slowdown_ - timeStep * 0.1f);
+        promptTimeToLive_ = ea::max(0.0f, promptTimeToLive_ - timeStep);
     }
 
     float slowdown_{ 1.0f };
+    float promptTimeToLive_{ 7.0f };
 };
 
 class GameUI : public RmlUIComponent
@@ -371,33 +381,6 @@ public:
 #ifdef __EMSCRIPTEN__
         showExit_ = false;
 #endif
-
-        RmlUI* ui = GetSubsystem<RmlUI>();
-        Rml::DataModelConstructor constructor = ui->GetRmlContext()->CreateDataModel("model");
-        constructor.Bind("has_keyboard", &hasKeyboard_);
-        constructor.Bind("show_menu", &showMenu_);
-        constructor.Bind("show_tutorial", &showTutorial_);
-        constructor.Bind("show_exit", &showExit_);
-        constructor.Bind("show_score", &showScore_);
-        constructor.Bind("score_text", &scoreText_);
-        constructor.Bind("tutorial_text", &tutorialText_);
-
-        const auto resume = [this] { TogglePaused(); };
-        const auto newGame = [this] { StartGame(MakeShared<ClassicGameSession>(context_)); };
-        const auto tutorial = [this] { StartGame(MakeShared<TutorialGameSession>(context_)); };
-        const auto demo = [this] { StartGame(MakeShared<DemoGameSession>(context_)); };
-        const auto exit = [this] { SendEvent(E_EXITREQUESTED); };
-
-        constructor.BindEventCallback("resume", WrapCallback(resume));
-        constructor.BindEventCallback("new_game", WrapCallback(newGame));
-        constructor.BindEventCallback("tutorial", WrapCallback(tutorial));
-        constructor.BindEventCallback("demo", WrapCallback(demo));
-        constructor.BindEventCallback("exit", WrapCallback(exit));
-
-        model_ = constructor.GetModelHandle();
-
-        SetResource("UI/GameUI.rml");
-        SetOpen(true);
     }
 
     ~GameUI() override
@@ -429,7 +412,6 @@ public:
         model_.DirtyVariable("show_score");
         model_.DirtyVariable("score_text");
         model_.DirtyVariable("tutorial_text");
-        model_.Update();
     }
 
     void TogglePaused()
@@ -460,6 +442,40 @@ public:
     }
 
 private:
+    void OnNodeSet(Node* node) override
+    {
+        BaseClassName::OnNodeSet(node);
+        if (!node)
+            return;
+
+        RmlUI* ui = GetSubsystem<RmlUI>();
+        Rml::DataModelConstructor constructor = ui->GetRmlContext()->CreateDataModel("model");
+        constructor.Bind("has_keyboard", &hasKeyboard_);
+        constructor.Bind("show_menu", &showMenu_);
+        constructor.Bind("show_tutorial", &showTutorial_);
+        constructor.Bind("show_exit", &showExit_);
+        constructor.Bind("show_score", &showScore_);
+        constructor.Bind("score_text", &scoreText_);
+        constructor.Bind("tutorial_text", &tutorialText_);
+
+        const auto resume = [this] { TogglePaused(); };
+        const auto newGame = [this] { StartGame(MakeShared<ClassicGameSession>(context_)); };
+        const auto tutorial = [this] { StartGame(MakeShared<TutorialGameSession>(context_)); };
+        const auto demo = [this] { StartGame(MakeShared<DemoGameSession>(context_)); };
+        const auto exit = [this] { SendEvent(E_EXITREQUESTED); };
+
+        constructor.BindEventCallback("resume", WrapCallback(resume));
+        constructor.BindEventCallback("new_game", WrapCallback(newGame));
+        constructor.BindEventCallback("tutorial", WrapCallback(tutorial));
+        constructor.BindEventCallback("demo", WrapCallback(demo));
+        constructor.BindEventCallback("exit", WrapCallback(exit));
+
+        model_ = constructor.GetModelHandle();
+
+        SetResource("UI/GameUI.rml");
+        SetOpen(true);
+    }
+
     void CreateUI()
     {
         // Create events
