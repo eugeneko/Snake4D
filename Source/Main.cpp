@@ -121,6 +121,8 @@ public:
 
     virtual bool IsTutorialHintVisible() { return false; };
 
+    virtual bool IsUIHidden() { return !menuPaused_ && keyPaused_; }
+
     virtual Color GetTutorialHintColor() { return Color::WHITE; }
 
     virtual ea::string GetTutorialHint() { return ""; }
@@ -129,16 +131,22 @@ public:
 
     virtual float GetArtificialSlowdown() { return 1.0f; };
 
+    virtual bool IsSmoothRotation() { return false; }
+
     unsigned GetScore() const { return sim_.GetSnakeLength(); }
 
     float GetLogicInterpolationFactor() const { return logicTimeAccumulator_ / updatePeriod_; }
 
     void SetUpdatePeriod(float period) { updatePeriod_ = period; }
 
-    void SetPaused(bool paused) { paused_ = paused; }
+    void SetPaused(bool paused) { menuPaused_ = paused; }
 
     void Update(float timeStep)
     {
+        auto input = context_->GetSubsystem<Input>();
+        if (!menuPaused_ && (input->GetKeyPress(KEY_PAUSE) || input->GetKeyPress(KEY_P)))
+            keyPaused_ = !keyPaused_;
+
         DoUpdate(timeStep);
 
         const auto animationType = sim_.GetCurrentAnimationType(GetLogicInterpolationFactor());
@@ -146,7 +154,10 @@ public:
         const float logicUpdatePeriod = currentPeriod * GetArtificialSlowdown();
         const float logicTimeStep = timeStep / logicUpdatePeriod;
 
-        if (!paused_)
+        if (!menuPaused_)
+            sim_.UpdateTilt(input->GetMouseMove(), timeStep);
+
+        if (!menuPaused_ && !keyPaused_)
         {
             logicTimeAccumulator_ += logicTimeStep;
             sim_.UpdateAnimation(timeStep / GetArtificialSlowdown());
@@ -160,18 +171,21 @@ public:
             settings_.animationSettings_.snakeMovementSpeed_ = settings_.CalculateSnakeMovementSpeed(GetScore());
             sim_.SetAnimationSettings(settings_.animationSettings_);
         }
+
+        sim_.UpdateCamera(GetLogicInterpolationFactor(), timeStep);
     }
 
     void Render(Scene4D& scene4D)
     {
-        sim_.Render(scene4D, GetLogicInterpolationFactor());
+        sim_.Render(scene4D, GetLogicInterpolationFactor(), IsSmoothRotation());
     }
 
 protected:
     virtual void DoUpdate(float timeStep) = 0;
     virtual void DoTick() { sim_.Tick(); }
 
-    bool paused_{};
+    bool menuPaused_{};
+    bool keyPaused_{};
     float updatePeriod_{ 1.0f };
     float logicTimeAccumulator_{};
 
@@ -311,7 +325,7 @@ public:
     {
         settings_.scoreToPeriod_ = { { 0, 0.4f } };
         settings_.rotationSlowdown_ = 1.35f;
-        settings_.colorRotationSlowdown_ = 3.95f;
+        settings_.colorRotationSlowdown_ = settings_.rotationSlowdown_; //3.95f;
         settings_.snakeMovementSpeed_ = 1.0f;
         settings_.animationSettings_.snakeMovementSpeed_ = 1.0f;
         settings_.animationSettings_.cameraTranslationSpeed_ = 1.0f;
@@ -323,6 +337,8 @@ public:
     }
 
     ea::string GetScoreString() override { return FormatScore("AI Score", GetScore()); }
+
+    bool IsSmoothRotation() override { return true; }
 
 protected:
     void DoUpdate(float timeStep) override
@@ -406,7 +422,9 @@ public:
 
         scoreText_ = currentSession_ ? currentSession_->GetScoreString() : "";
         showScore_ = !scoreText_.empty();
+        hideUi_ = currentSession_ ? currentSession_->IsUIHidden() : false;
 
+        model_.DirtyVariable("hide_ui");
         model_.DirtyVariable("show_menu");
         model_.DirtyVariable("show_tutorial");
         model_.DirtyVariable("show_score");
@@ -451,6 +469,7 @@ private:
         RmlUI* ui = GetSubsystem<RmlUI>();
         Rml::DataModelConstructor constructor = ui->GetRmlContext()->CreateDataModel("model");
         constructor.Bind("has_keyboard", &hasKeyboard_);
+        constructor.Bind("hide_ui", &hideUi_);
         constructor.Bind("show_menu", &showMenu_);
         constructor.Bind("show_tutorial", &showTutorial_);
         constructor.Bind("show_exit", &showExit_);
@@ -498,6 +517,7 @@ private:
     SharedPtr<GameSession> currentSession_;
 
     bool hasKeyboard_{};
+    bool hideUi_{ false };
     bool showMenu_{ true };
     bool showTutorial_{};
     bool showExit_{ true };
@@ -619,6 +639,7 @@ private:
 
 void MainApplication::Setup()
 {
+    engineParameters_[EP_WINDOW_TITLE] = "Snake4D";
     engineParameters_[EP_APPLICATION_NAME] = "Snake4D";
     engineParameters_[EP_HIGH_DPI] = false;
     engineParameters_[EP_FULL_SCREEN]  = false;

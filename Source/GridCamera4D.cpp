@@ -13,6 +13,9 @@ void GridCamera4D::Reset(const IntVector4& position, const IntVector4& direction
     previousRotation_ = { rotation, Vector4::ZERO };
     currentRotation_ = { rotation, Vector4::ZERO };
     rotationDelta_ = {};
+
+    smoothCameraPosition_ = IndexToPosition(currentPosition_);
+    smoothCameraRotation_ = currentRotation_;
 }
 
 void GridCamera4D::Step(const RotationDelta4D& delta, bool move)
@@ -31,6 +34,14 @@ void GridCamera4D::Step(const RotationDelta4D& delta, bool move)
     previousPosition_ = currentPosition_;
     if (move)
         currentPosition_ = currentPosition_ + currentDirection_;
+}
+
+void GridCamera4D::UpdateSmoothCamera(float blendFactor, float timeStep, float smoothingConstant)
+{
+    const float lerpConstant = 1.0f - Clamp(powf(2.0f, -timeStep * smoothingConstant), 0.0f, 1.0f);
+    smoothCameraPosition_ = smoothCameraPosition_.Lerp(GetWorldPosition(blendFactor), lerpConstant);
+    smoothCameraRotation_ = smoothCameraRotation_.Lerp(GetWorldRotation(blendFactor), lerpConstant);
+    smoothCameraMatrix_ = smoothCameraRotation_.FastInverted() * Matrix4x5::MakeTranslation(-smoothCameraPosition_);
 }
 
 Vector4 GridCamera4D::GetWorldPosition(float blendFactor) const

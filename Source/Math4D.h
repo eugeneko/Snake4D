@@ -139,9 +139,26 @@ struct Matrix4x5
         rotation[axis2][axis2] = cosA;
         return { Matrix4{ &rotation[0][0] }, Vector4::ZERO };
     }
+    static Matrix4 Rectify(Matrix4 rotation)
+    {
+        float* data = &rotation.m00_;
+        for (unsigned i = 0; i < 4; ++i)
+        {
+            const Vector4 axis = rotation.Column(i);
+            const float invAxisLength = 1.0f / Sqrt(axis.x_ * axis.x_ + axis.y_ * axis.y_ + axis.z_ * axis.z_ + axis.w_ * axis.w_);
+            for (unsigned j = 0; j < 4; ++j)
+                data[j * 4 + i] *= invAxisLength;
+        }
+        return rotation;
+    }
     Matrix4x5 FastInverted() const
     {
         return { rotation_.Transpose(), -position_ };
+    }
+    Matrix4x5 Lerp(const Matrix4x5& rhs, float factor) const
+    {
+        auto rotation = Urho3D::Lerp(rotation_, rhs.rotation_, factor);
+        return { Rectify(rotation), position_.Lerp(rhs.position_, factor) };
     }
     Vector4 operator *(const Vector4& rhs) const
     {

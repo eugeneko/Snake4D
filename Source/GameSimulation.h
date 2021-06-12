@@ -189,9 +189,28 @@ public:
 
     void SetExactGuidelines(bool exactGuidelines) { exactGuidelines_ = exactGuidelines; }
 
-    void Render(Scene4D& scene, float blendFactor) const
+    void UpdateTilt(const IntVector2& mouseMove, float timeStep)
     {
-        ResetScene(scene, blendFactor);
+        const float smoothingConstant = 2.5f;
+        const float moveSpeed = 0.1f;
+        const float lerpConstant = 1.0f - Clamp(powf(2.0f, -timeStep * smoothingConstant), 0.0f, 1.0f);
+        const float tiltResetDelay = 2.5f;
+        const Vector2 maxTilt{ 120.0f, 80.0f };
+
+        smoothMouseMove_ = smoothMouseMove_.Lerp(static_cast<Vector2>(mouseMove) * moveSpeed, lerpConstant);
+        accumulatedTilt_ = VectorClamp(accumulatedTilt_ + smoothMouseMove_, -maxTilt, maxTilt);
+        tiltResetCooldown_ = mouseMove != IntVector2::ZERO ? tiltResetDelay : ea::max(0.0f, tiltResetCooldown_ - timeStep);
+        if (tiltResetCooldown_ == 0.0f)
+            accumulatedTilt_ = accumulatedTilt_.Lerp(Vector2::ZERO, lerpConstant);
+
+        const auto tiltX = Matrix4x5::MakeRotation(0, 2, -accumulatedTilt_.x_);
+        const auto tiltY = Matrix4x5::MakeRotation(1, 2, accumulatedTilt_.y_);
+        tiltMatrix_ = tiltY * tiltX;
+    }
+
+    void Render(Scene4D& scene, float blendFactor, bool smooth) const
+    {
+        ResetScene(scene, blendFactor, smooth);
         RenderSnakeHead(scene, blendFactor);
         RenderSnakeTail(scene, blendFactor);
         RenderSceneBorders(scene);
@@ -226,6 +245,12 @@ public:
         targetAnimationTimer2_ -= timeStep * renderSettings_.targetRotationSpeed2_;
         if (targetAnimationTimer2_ < 0.0f)
             targetAnimationTimer2_ += 1.0f;
+    }
+
+    void UpdateCamera(float blendFactor, float timeStep)
+    {
+        const float smoothingConstant = 5.0f;
+        camera_.UpdateSmoothCamera(blendFactor, timeStep, smoothingConstant);
     }
 
     void Tick()
@@ -391,15 +416,17 @@ private:
         return true;
     }
 
-    void ResetScene(Scene4D& scene, float blendFactor) const
+    void ResetScene(Scene4D& scene, float blendFactor, bool smooth) const
     {
         // Update camera
         const float cameraTranslationFactor = Clamp(blendFactor * animationSettings_.cameraTranslationSpeed_, 0.0f, 1.0f);
         const float cameraRotationFactor = Clamp(blendFactor * animationSettings_.cameraRotationSpeed_, 0.0f, 1.0f);
-        const Matrix4x5 camera = camera_.GetViewMatrix(cameraTranslationFactor, cameraRotationFactor);
+        const Matrix4x5 cameraMatrix = smooth
+            ? camera_.GetSmoothViewMatrix()
+            : camera_.GetViewMatrix(cameraTranslationFactor, cameraRotationFactor);
 
         // Reset scene
-        scene.Reset(camera);
+        scene.Reset(tiltMatrix_ * cameraMatrix);
 
         scene.cameraOffset_ = Vector3::ZERO;
         if (deathAnimation_)
@@ -779,6 +806,11 @@ private:
 
     float targetAnimationTimer1_{};
     float targetAnimationTimer2_{};
+
+    Vector2 smoothMouseMove_;
+    Vector2 accumulatedTilt_;
+    float tiltResetCooldown_{};
+    Matrix4x5 tiltMatrix_{ Matrix4x5::MakeIdentity() };
 };
 
 }

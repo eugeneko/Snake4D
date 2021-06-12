@@ -35,6 +35,8 @@ public:
 
     void Step(const RotationDelta4D& delta, bool move);
 
+    void UpdateSmoothCamera(float blendFactor, float timeStep, float smoothingConstant);
+
     Vector4 GetWorldPosition(float blendFactor) const;
 
     Matrix4x5 GetWorldRotation(float blendFactor) const;
@@ -46,6 +48,8 @@ public:
     Matrix4x5 GetCurrentViewMatrix() const { return GetViewMatrix(1.0f, 1.0f); }
 
     Matrix4x5 GetCurrentModelMatrix() const { return GetModelMatrix(1.0f, 1.0f); }
+
+    Matrix4x5 GetSmoothViewMatrix() const { return smoothCameraMatrix_; }
 
     const IntVector4& GetCurrentPosition() const { return currentPosition_; }
 
@@ -70,5 +74,9 @@ private:
     Matrix4x5 previousRotation_;
     Matrix4x5 currentRotation_;
     RotationDelta4D rotationDelta_;
+
+    Vector4 smoothCameraPosition_;
+    Matrix4x5 smoothCameraRotation_;
+    Matrix4x5 smoothCameraMatrix_;
 };
 }

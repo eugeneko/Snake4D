@@ -14,9 +14,9 @@
                 <button data-event-click="exit" data-if="show_exit">Exit</button>
             </div>
         </div>
-        <button data-event-click="resume" style="width:auto; position:absolute; right:0; top:0; margin:0;">[Tab] Pause Menu</button>
-        <div id="transparent-window" data-if="show_score" style="width:auto; margin:0; position:absolute; left: 0; top: 0; white-space:pre;">{{score_text}}</div>
-        <div id="transparent-window" data-if="show_tutorial" style="width:150dp; height:80dp; margin:auto; white-space:pre; text-align:center;">{{tutorial_text}}</div>
+        <button data-event-click="resume" data-if="!hide_ui" style="width:auto; position:absolute; right:0; top:0; margin:0;">[Tab] Pause Menu</button>
+        <div id="transparent-window" data-if="show_score && !hide_ui" style="width:auto; margin:0; position:absolute; left: 0; top: 0; white-space:pre;">{{score_text}}</div>
+        <div id="transparent-window" data-if="show_tutorial && !hide_ui" style="width:150dp; height:80dp; margin:auto; white-space:pre; text-align:center;">{{tutorial_text}}</div>
     </body>
 
 </rml>
