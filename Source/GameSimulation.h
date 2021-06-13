@@ -189,23 +189,37 @@ public:
 
     void SetExactGuidelines(bool exactGuidelines) { exactGuidelines_ = exactGuidelines; }
 
-    void UpdateTilt(const IntVector2& mouseMove, float timeStep)
+    void UpdateTilt(const IntVector2& mouseMove, int mouseScroll, float timeStep)
     {
         const float smoothingConstant = 2.5f;
         const float moveSpeed = 0.1f;
         const float lerpConstant = 1.0f - Clamp(powf(2.0f, -timeStep * smoothingConstant), 0.0f, 1.0f);
         const float tiltResetDelay = 2.5f;
-        const Vector2 maxTilt{ 120.0f, 80.0f };
+        const float movePower = 1.2f;
+        const float scrollSpeed = 12.0f;
 
-        smoothMouseMove_ = smoothMouseMove_.Lerp(static_cast<Vector2>(mouseMove) * moveSpeed, lerpConstant);
-        accumulatedTilt_ = VectorClamp(accumulatedTilt_ + smoothMouseMove_, -maxTilt, maxTilt);
-        tiltResetCooldown_ = mouseMove != IntVector2::ZERO ? tiltResetDelay : ea::max(0.0f, tiltResetCooldown_ - timeStep);
+        Vector2 adjustedMouseMove = static_cast<Vector2>(mouseMove) * moveSpeed;
+        adjustedMouseMove.x_ = Sign(adjustedMouseMove.x_) * powf(Abs(adjustedMouseMove.x_), movePower);
+        adjustedMouseMove.y_ = Sign(adjustedMouseMove.y_) * powf(Abs(adjustedMouseMove.y_), movePower);
+        const float adjustedMouseScroll = scrollSpeed * mouseScroll;
+
+        smoothMouseMove_ = smoothMouseMove_.Lerp(adjustedMouseMove, lerpConstant);
+        smoothMouseScroll_ = Lerp(smoothMouseScroll_, adjustedMouseScroll, lerpConstant);
+
+        accumulatedTilt_ += Vector3(smoothMouseMove_, smoothMouseScroll_);
+        accumulatedTilt_.x_ = Fract((accumulatedTilt_.x_ + 180.0f) / 360.0f) * 360.0f - 180.0f;
+        accumulatedTilt_.y_ = Clamp(accumulatedTilt_.y_, -100.0f, 60.0f);
+        accumulatedTilt_.z_ = Fract((accumulatedTilt_.z_ + 180.0f) / 360.0f) * 360.0f - 180.0f;
+
+        const bool hasAction = mouseMove != IntVector2::ZERO || Abs(mouseScroll) > M_LARGE_EPSILON;
+        tiltResetCooldown_ = hasAction ? tiltResetDelay : ea::max(0.0f, tiltResetCooldown_ - timeStep);
         if (tiltResetCooldown_ == 0.0f)
-            accumulatedTilt_ = accumulatedTilt_.Lerp(Vector2::ZERO, lerpConstant);
+            accumulatedTilt_ = accumulatedTilt_.Lerp(Vector3::ZERO, lerpConstant);
 
         const auto tiltX = Matrix4x5::MakeRotation(0, 2, -accumulatedTilt_.x_);
         const auto tiltY = Matrix4x5::MakeRotation(1, 2, accumulatedTilt_.y_);
-        tiltMatrix_ = tiltY * tiltX;
+        const auto tiltXW = Matrix4x5::MakeRotation(0, 3, accumulatedTilt_.z_);
+        tiltMatrix_ = tiltY * tiltX * tiltXW;
     }
 
     void Render(Scene4D& scene, float blendFactor, bool smooth) const
@@ -808,7 +822,8 @@ private:
     float targetAnimationTimer2_{};
 
     Vector2 smoothMouseMove_;
-    Vector2 accumulatedTilt_;
+    float smoothMouseScroll_{};
+    Vector3 accumulatedTilt_;
     float tiltResetCooldown_{};
     Matrix4x5 tiltMatrix_{ Matrix4x5::MakeIdentity() };
 };

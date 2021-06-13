@@ -155,7 +155,7 @@ public:
         const float logicTimeStep = timeStep / logicUpdatePeriod;
 
         if (!menuPaused_)
-            sim_.UpdateTilt(input->GetMouseMove(), timeStep);
+            sim_.UpdateTilt(input->GetMouseMove(), input->GetMouseMoveWheel(), timeStep);
 
         if (!menuPaused_ && !keyPaused_)
         {
