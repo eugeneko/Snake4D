@@ -2,6 +2,8 @@
 
 Play in Web [here](https://eugeneko.github.io/Snake4D/Snake4D.html)
 
+![](Docs/title.png)
+
 ## Introduction
 
 **Snake4D** is classic snake game in the mathematically correct 4D world.

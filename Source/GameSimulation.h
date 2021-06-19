@@ -189,7 +189,7 @@ public:
 
     void SetExactGuidelines(bool exactGuidelines) { exactGuidelines_ = exactGuidelines; }
 
-    void UpdateTilt(const IntVector2& mouseMove, int mouseScroll, float timeStep)
+    void UpdateTilt(const IntVector2& mouseMove, float mouseScroll, float timeStep)
     {
         const float smoothingConstant = 2.5f;
         const float moveSpeed = 0.1f;

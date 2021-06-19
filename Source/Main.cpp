@@ -154,8 +154,18 @@ public:
         const float logicUpdatePeriod = currentPeriod * GetArtificialSlowdown();
         const float logicTimeStep = timeStep / logicUpdatePeriod;
 
+        auto mouseWheel = static_cast<float>(input->GetMouseMoveWheel());
+#ifdef __EMSCRIPTEN__
+        mouseWheel /= 125.0f;
+#endif
+
         if (!menuPaused_)
-            sim_.UpdateTilt(input->GetMouseMove(), input->GetMouseMoveWheel(), timeStep);
+        {
+            if (keyPaused_)
+                sim_.UpdateTilt(input->GetMouseMove(), mouseWheel, timeStep);
+            else
+                sim_.UpdateTilt(IntVector2::ZERO, 0.0f, timeStep);
+        }
 
         if (!menuPaused_ && !keyPaused_)
         {
