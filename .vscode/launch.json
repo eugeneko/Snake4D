@@ -5,24 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(Windows) Snake4D Borderless",
+            "name": "Launch",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
-            "args": ["-w", "--borderless", "--pp", "${workspaceFolder}/bin", "--pr", "CoreData;Data", "-m", "4"],
+            "args": ["-m", "4"],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build/Debug/Source/Debug",
-            "visualizerFile": "${workspaceFolder}/3rdParty/rbfx/script/rbfx.natvis",
-            "environment": []
-        },
-        {
-            "name": "(Windows) Snake4D Window",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${command:cmake.launchTargetPath}",
-            "args": ["-w", "-s", "--pp", "${workspaceFolder}/bin", "--pr", "CoreData;Data", "-m", "4"],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/build/Debug/Source/Debug",
+            "cwd": "${workspaceFolder}/bin",
             "visualizerFile": "${workspaceFolder}/3rdParty/rbfx/script/rbfx.natvis",
             "environment": []
         }

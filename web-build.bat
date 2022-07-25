@@ -4,7 +4,7 @@ cmake --build . --config Debug -j12
 
 del /Q Package\*.*
 md Package
-copy Source\Resources.* Package\Resources.*
-copy Source\Snake4D.* Package\Snake4D.*
-ren Package\Snake4D.html index.html
+copy Resources.* Package\Resources.*
+copy 3rdParty\rbfx\Source\Player\Player.* Package\Player.*
+ren Package\Player.html index.html
 popd

@@ -636,18 +636,23 @@ private:
     WeakPtr<Camera> camera_;
 };
 
-class MainApplication : public Application
+class MainApplication : public MainPluginApplication
 {
+    URHO3D_OBJECT(MainApplication, MainPluginApplication);
+
 public:
-    MainApplication(Context* context) : Application(context) {}
-    void Setup() override;
-    void Start() override;
+    MainApplication(Context* context) : MainPluginApplication(context) {}
 
 private:
+    void Load() override;
+    void Unload() override;
+    void Start(bool isMain) override;
+    void Stop() override;
+
     SharedPtr<GameRenderer> gameRenderer_;
 };
 
-void MainApplication::Setup()
+/*void MainApplication::Setup()
 {
     engineParameters_[EP_WINDOW_TITLE] = "Snake4D";
     engineParameters_[EP_APPLICATION_NAME] = "Snake4D";
@@ -656,12 +661,19 @@ void MainApplication::Setup()
     engineParameters_[EP_HEADLESS] = false;
     engineParameters_[EP_MULTI_SAMPLE] = 4;
     engineParameters_[EP_WINDOW_ICON] = "Textures/UrhoIcon.png";
+}*/
+
+void MainApplication::Load()
+{
+    AddObjectReflection<GameUI>();
 }
 
-void MainApplication::Start()
+void MainApplication::Unload()
 {
-    context_->RegisterFactory<GameUI>();
+}
 
+void MainApplication::Start(bool isMain)
+{
     auto input = GetSubsystem<Input>();
     auto rml = GetSubsystem<RmlUI>();
     auto renderer = GetSubsystem<Renderer>();
@@ -689,4 +701,9 @@ void MainApplication::Start()
     gameRenderer_->Initialize(renderCallback);
 }
 
-URHO3D_DEFINE_APPLICATION_MAIN(MainApplication);
+void MainApplication::Stop()
+{
+    gameRenderer_ = nullptr;
+}
+
+URHO3D_DEFINE_PLUGIN_MAIN(MainApplication);
