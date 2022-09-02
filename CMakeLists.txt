@@ -20,7 +20,7 @@ set (URHO3D_PROFILER OFF CACHE BOOL "")
 
 set (URHO3D_PLAYER OFF CACHE BOOL "")
 set (URHO3D_EDITOR OFF CACHE BOOL "")
-set (URHO3D_PLUGIN_LIST "Snake4D" CACHE BOOL "")
+set (URHO3D_PLUGIN_LIST "Snake4D" CACHE STRING "")
 
 include (${CMAKE_SOURCE_DIR}/3rdParty/rbfx/cmake/Modules/UrhoCommon.cmake)
 add_subdirectory (${CMAKE_SOURCE_DIR}/3rdParty/rbfx)
